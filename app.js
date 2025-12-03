@@ -1,7 +1,6 @@
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import connectDB from "./config/db.js";
 import userRoutes from "./routes/user.routes.js";
@@ -15,33 +14,38 @@ const app = express();
 
 // ✅ CORS setup for multiple origins
 const allowedOrigins = [
-  "http://localhost:3000", // your local frontend
+  "http://localhost:3000", // local frontend
   "https://automatedpostingsfrontend.onrender.com" // deployed frontend
 ];
 
 app.use(cors({
   origin: function(origin, callback){
-    // allow requests with no origin like Postman
-    if(!origin) return callback(null, true);
-    if(allowedOrigins.indexOf(origin) === -1){
-      const msg = `The CORS policy for this site does not allow access from the specified Origin.`;
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
+    if(!origin) return callback(null, true); // allow Postman / server requests
+    if(allowedOrigins.includes(origin)) return callback(null, true);
+    callback(new Error("Not allowed by CORS"), false);
   },
-  credentials: true
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  credentials: true, // allow cookies / auth headers
+}));
+
+// ✅ Handle preflight requests
+app.options("*", cors({
+  origin: allowedOrigins,
+  credentials: true,
 }));
 
 app.use(express.json());
 app.use(cookieParser());
 
+// Routes
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 
-// publish & metrics
+// Facebook publish & metrics
 app.post('/publish/facebook', facebookController.publish);
 app.get('/metrics/facebook', facebookController.metrics);
 
+// Start server
 app.listen(process.env.PORT, () => {
   console.log(`Server running on port ${process.env.PORT} 🚀`);
 });
