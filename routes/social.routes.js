@@ -1,11 +1,8 @@
-import express from "express";
-import { facebookCallback, instagramCallback } from "../controllers/social.controller.js";
-import { verifyToken } from "../middlewares/auth.js";
-
+const express = require('express');
 const router = express.Router();
+const controller = require('../controllers/social.controller.js');
 
-// Facebook & Instagram callbacks protected with JWT
-router.get("/facebook/callback", verifyToken, facebookCallback);
-router.get("/instagram/callback", verifyToken, instagramCallback);
+router.get('/facebook', controller.authRedirect);
+router.get('/facebook/callback', controller.callback);
 
-export default router;
+module.exports = router;
