@@ -115,7 +115,6 @@ export const metrics = async (req, res) => {
     const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
     if (!acc) return res.status(404).json({ msg: 'Page not connected' });
 
-
     const url = `https://graph.facebook.com/v17.0/${pageId}`;
     const params = { fields: 'name,fan_count,followers_count,engagement', access_token: acc.accessToken };
     const axios = require('axios');

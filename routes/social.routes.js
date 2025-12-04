@@ -7,6 +7,6 @@ router.get("/facebook", controller.authRedirect);
 router.get("/facebook/callback", controller.callback);
 
 // Get pages and metrics
-router.get("/pages/:userId", getPages);
+router.get("/pages/:userId", controller.metrics);
 
 export default router;
