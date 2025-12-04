@@ -40,7 +40,7 @@ export const callback = async (req, res) => {
     if (!userId) return res.status(400).send("Missing userId");
 
     // Convert userId to ObjectId
-    let userObjectId;
+    let userObjectId; 
     try {
       userObjectId = mongoose.Types.ObjectId(userId);
     } catch (e) {
