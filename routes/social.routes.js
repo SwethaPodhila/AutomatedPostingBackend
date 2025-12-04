@@ -1,8 +1,9 @@
-const express = require('express');
+import express from "express";
+import * as controller from "../controllers/social.controller.js";
+
 const router = express.Router();
-const controller = require('../controllers/social.controller.js');
 
-router.get('/facebook', controller.authRedirect);
-router.get('/facebook/callback', controller.callback);
+router.get("/facebook", controller.authRedirect);
+router.get("/facebook/callback", controller.callback);
 
-module.exports = router;
+export default router;

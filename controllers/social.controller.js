@@ -1,9 +1,9 @@
-const dotenv = require("dotenv");
+import dotenv from "dotenv";
 dotenv.config();
 
-const User = require("../models/users.js");
-const SocialAccount = require("../models/socialAccount.js");
-const fbApi = require("../utils/FbApis.js");
+import User from "../models/users.js";
+import SocialAccount from "../models/socialAccount.js";
+import fbApi from "../utils/FbApis.js";
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
