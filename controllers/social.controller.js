@@ -1,20 +1,28 @@
-const User = require('../models/users.js');
-const SocialAccount = require('../models/socialAccount.js');
-const fbApi = require('../utils/FbApis.js');
+const dotenv = require("dotenv");
+dotenv.config();
+
+const User = require("../models/users.js");
+const SocialAccount = require("../models/socialAccount.js");
+const fbApi = require("../utils/FbApis.js");
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
-// 1) Redirect user to FB OAuth
 exports.authRedirect = (req, res) => {
   const scopes = [
-    'pages_read_engagement',
-    'pages_read_user_content',
-    'pages_manage_posts',
-    'public_profile',
-    'email',
-    'pages_show_list'
+    "pages_read_engagement",
+    "pages_read_user_content",
+    "pages_manage_posts",
+    "public_profile",
+    "email",
+    "pages_show_list",
   ];
-  const url = fbApi.getAuthUrl({ clientId: FB_APP_ID, redirectUri: FB_REDIRECT_URI, scopes });
+
+  const url = fbApi.getAuthUrl({
+    clientId: FB_APP_ID,
+    redirectUri: FB_REDIRECT_URI,
+    scopes,
+  });
+
   return res.redirect(url);
 };
 
