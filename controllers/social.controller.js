@@ -98,7 +98,6 @@ export const publish = async (req, res) => {
     const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
     if (!acc) return res.status(404).json({ msg: 'Page not connected' });
 
-
     const pageToken = acc.accessToken;
     const result = await fbApi.publishToPage({ pageAccessToken: pageToken, pageId, message });
     return res.json({ success: true, result });

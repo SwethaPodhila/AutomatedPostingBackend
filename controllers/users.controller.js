@@ -101,13 +101,14 @@ export const verifyOtp = async (req, res) => {
 
         // 🔑 Generate JWT token (expires in 1 day)
         const token = jwt.sign(
-            { id: user._id, name: user.name, email: user.email },
+            { id: user._id.toString(), name: user.name, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
         return res.json({
             msg: "Account verified successfully",
             success: true,
+            userId: user._id.toString(),
             token,
         });
     } catch (err) {
@@ -130,11 +131,11 @@ export const login = async (req, res) => {
         if (!isMatch) return res.json({ msg: "Invalid password", success: false });
 
         const token = jwt.sign(
-            { id: user._id, name: user.name, email: user.email },
+            { id: user._id.toString(), name: user.name, email: user.email },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
-        res.json({ msg: "Login successful", token, success: true });
+        res.json({ msg: "Login successful", token,  userId: user._id.toString(),success: true });
        // res.json({ msg: "Login successful", token });
     } catch (err) {
         res.status(500).json({ msg: err.message });
