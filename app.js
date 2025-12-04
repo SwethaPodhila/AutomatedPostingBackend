@@ -40,7 +40,6 @@ app.use("/social", socialRoutes);
 
 // publish & metrics
 app.post('/publish/facebook', facebookController.publish);
-app.get('/metrics/facebook', facebookController.metrics);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server running on port ${process.env.PORT} 🚀`);

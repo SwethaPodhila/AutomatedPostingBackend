@@ -34,7 +34,7 @@ export const authRedirect = (req, res) => {
 export const callback = async (req, res) => {
   try {
     const { code, state } = req.query;
-    const userId = state;
+    const userId = decodeURIComponent(state);
 
     if (!code) return res.status(400).send("Missing code");
     if (!userId) return res.status(400).send("Missing userId");
@@ -115,7 +115,13 @@ export const metrics = async (req, res) => {
     const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
     if (!acc) return res.status(404).json({ msg: 'Page not connected' });
 
-    const url = `https://graph.facebook.com/v17.0/${pageId}`;
+    // const url = `https://graph.facebook.com/v17.0/${pageId}`;
+    const url =
+      `https://www.facebook.com/v20.0/dialog/oauth` +
+      `?client_id=${FB_APP_ID}` +
+      `&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}` +
+      `&state=${encodeURIComponent(userId)}` +
+      `&scope=${scopes.join(",")}`;
     const params = { fields: 'name,fan_count,followers_count,engagement', access_token: acc.accessToken };
     const axios = require('axios');
     const response = await axios.get(url, { params });
