@@ -23,8 +23,8 @@ export const authRedirect = (req, res) => {
   const url =
     `https://www.facebook.com/v20.0/dialog/oauth` +
     `?client_id=${FB_APP_ID}` +
-    `&redirect_uri=${FB_REDIRECT_URI}` +
-    `&state=${userId}` +
+    `&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}` +
+    `&state=${encodeURIComponent(userId)}` +
     `&scope=${scopes.join(",")}`;
 
   return res.redirect(url);
@@ -116,12 +116,8 @@ export const metrics = async (req, res) => {
     if (!acc) return res.status(404).json({ msg: 'Page not connected' });
 
     // const url = `https://graph.facebook.com/v17.0/${pageId}`;
-    const url =
-      `https://www.facebook.com/v20.0/dialog/oauth` +
-      `?client_id=${FB_APP_ID}` +
-      `&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}` +
-      `&state=${encodeURIComponent(userId)}` +
-      `&scope=${scopes.join(",")}`;
+    const url = `https://graph.facebook.com/v20.0/${pageId}`;
+
     const params = { fields: 'name,fan_count,followers_count,engagement', access_token: acc.accessToken };
     const axios = require('axios');
     const response = await axios.get(url, { params });
@@ -129,5 +125,21 @@ export const metrics = async (req, res) => {
   } catch (err) {
     console.error(err.response?.data || err.message);
     return res.status(500).json({ success: false });
+  }
+};
+
+export const getPages = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const pages = await SocialAccount.find({
+      user: userId,
+      platform: "facebook"
+    });
+
+    return res.json({ success: true, pages });
+  } catch (err) {
+    console.error(err.message);
+    return res.status(500).json({ success: false, message: "Failed to fetch pages" });
   }
 };
