@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 const SocialAccountSchema = new mongoose.Schema({
-user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+user: { type: String, required: true },
 platform: { type: String, required: true },
 providerId: String, // facebook user id or page id
 accessToken: String,

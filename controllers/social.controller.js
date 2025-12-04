@@ -34,7 +34,7 @@ export const authRedirect = (req, res) => {
 export const callback = async (req, res) => {
   try {
     console.log("===== FACEBOOK CALLBACK HIT =====");
-    console.log("FULL QUERY:", req.query);  // <--- VERY IMPORTANT
+    console.log("FULL QUERY:", req.query);
     console.log("Code:", req.query.code);
     console.log("State received:", req.query.state);
 
@@ -46,14 +46,11 @@ export const callback = async (req, res) => {
     if (!code) return res.status(400).send("Missing code");
     if (!userId) return res.status(400).send("Missing userId");
 
-    // Convert userId to ObjectId
-    let userObjectId;
-    try {
-      userObjectId = mongoose.Types.ObjectId(userId);
-    } catch (e) {
-      console.error("Invalid userId:", userId);
-      return res.status(400).send("Invalid userId");
-    }
+    // ❌ REMOVE ObjectId conversion
+    // let userObjectId = mongoose.Types.ObjectId(userId);
+
+    // ✅ Just keep userId as string
+    const userObjectId = userId;
 
     // Exchange code for access token
     const tokenRes = await fbApi.exchangeCodeForToken({
@@ -72,7 +69,7 @@ export const callback = async (req, res) => {
       console.log("No Facebook pages found for user:", userId);
     }
 
-    // Save each page in SocialAccount
+    // Save each page
     for (const page of pages.data || []) {
       console.log("Saving page:", page.id, "for user:", userId);
 
@@ -88,10 +85,12 @@ export const callback = async (req, res) => {
         },
         { upsert: true, new: true }
       );
+
       console.log("Saved page:", saved);
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
+
   } catch (err) {
     console.error("Callback Error ==>", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
