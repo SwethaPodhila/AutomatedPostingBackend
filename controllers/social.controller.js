@@ -4,6 +4,7 @@ dotenv.config();
 import User from "../models/users.js";
 import SocialAccount from "../models/socialAccount.js";
 import fbApi from "../utils/FbApis.js";
+import mongoose from "mongoose";
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
@@ -29,7 +30,6 @@ export const authRedirect = (req, res) => {
   return res.redirect(url);
 };
 
-
 // 2) Callback: exchange code -> token, list pages, save tokens
 export const callback = async (req, res) => {
   try {
@@ -39,7 +39,16 @@ export const callback = async (req, res) => {
     if (!code) return res.status(400).send("Missing code");
     if (!userId) return res.status(400).send("Missing userId");
 
-    // Exchange token
+    // Convert userId to ObjectId
+    let userObjectId;
+    try {
+      userObjectId = mongoose.Types.ObjectId(userId);
+    } catch (e) {
+      console.error("Invalid userId:", userId);
+      return res.status(400).send("Invalid userId");
+    }
+
+    // Exchange code for access token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
@@ -48,16 +57,22 @@ export const callback = async (req, res) => {
     });
 
     const accessToken = tokenRes.access_token;
+    if (!accessToken) return res.status(500).send("Failed to get access token");
 
-    // Get FB pages
+    // Get user's Facebook pages
     const pages = await fbApi.getUserPages(accessToken);
+    if (!pages.data || pages.data.length === 0) {
+      console.log("No Facebook pages found for user:", userId);
+    }
 
-    // Save one SocialAccount per page
+    // Save each page in SocialAccount
     for (const page of pages.data || []) {
-      await SocialAccount.findOneAndUpdate(
+      console.log("Saving page:", page.id, "for user:", userId);
+
+      const saved = await SocialAccount.findOneAndUpdate(
         { providerId: page.id, platform: "facebook" },
         {
-          user: userId,
+          user: userObjectId,
           platform: "facebook",
           providerId: page.id,
           accessToken: page.access_token || accessToken,
@@ -66,9 +81,10 @@ export const callback = async (req, res) => {
         },
         { upsert: true, new: true }
       );
+      console.log("Saved page:", saved);
     }
 
-    return res.redirect(`${FRONTEND_URL}/facebook-connected`);
+    return res.redirect(`${FRONTEND_URL}/success`);
   } catch (err) {
     console.error("Callback Error ==>", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
