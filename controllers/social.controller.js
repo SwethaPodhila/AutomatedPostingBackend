@@ -33,14 +33,21 @@ export const authRedirect = (req, res) => {
 // 2) Callback: exchange code -> token, list pages, save tokens
 export const callback = async (req, res) => {
   try {
+    console.log("===== FACEBOOK CALLBACK HIT =====");
+    console.log("FULL QUERY:", req.query);  // <--- VERY IMPORTANT
+    console.log("Code:", req.query.code);
+    console.log("State received:", req.query.state);
+
     const { code, state } = req.query;
     const userId = decodeURIComponent(state);
+
+    console.log("Decoded userId:", userId);
 
     if (!code) return res.status(400).send("Missing code");
     if (!userId) return res.status(400).send("Missing userId");
 
     // Convert userId to ObjectId
-    let userObjectId; 
+    let userObjectId;
     try {
       userObjectId = mongoose.Types.ObjectId(userId);
     } catch (e) {
