@@ -7,7 +7,7 @@ import fbApi from "../utils/FbApis.js";
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
-exports.authRedirect = (req, res) => {
+export const authRedirect = (req, res) => {
   const scopes = [
     "pages_read_engagement",
     "pages_read_user_content",
@@ -27,7 +27,7 @@ exports.authRedirect = (req, res) => {
 };
 
 // 2) Callback: exchange code -> token, list pages, save tokens
-exports.callback = async (req, res) => {
+export const callback = async (req, res) => {
   try {
     const { code } = req.query;
     if (!code) return res.status(400).send('Missing code');
@@ -81,7 +81,7 @@ exports.callback = async (req, res) => {
 };
 
 // 3) Publish endpoint
-exports.publish = async (req, res) => {
+export const publish = async (req, res) => {
   try {
     const { pageId, message } = req.body;
     const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
@@ -98,7 +98,7 @@ exports.publish = async (req, res) => {
 };
 
 // 4) Metrics: simple followers count for a page
-exports.metrics = async (req, res) => {
+export const metrics = async (req, res) => {
   try {
     const { pageId } = req.query;
     const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
