@@ -5,6 +5,8 @@ import User from "../models/users.js";
 import SocialAccount from "../models/socialAccount.js";
 import fbApi from "../utils/FbApis.js";
 import mongoose from "mongoose";
+import axios from "axios";
+
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
@@ -114,18 +116,28 @@ export const publish = async (req, res) => {
 };
 
 // 4) Metrics: simple followers count for a page
+
 export const metrics = async (req, res) => {
   try {
-    const { pageId } = req.query;
-    const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
-    if (!acc) return res.status(404).json({ msg: 'Page not connected' });
+    const { pageId } = req.params;  
 
-    // const url = `https://graph.facebook.com/v17.0/${pageId}`;
+    const acc = await SocialAccount.findOne({
+      providerId: pageId,
+      platform: "facebook",
+    });
+
+    if (!acc) {
+      return res.status(404).json({ msg: "Page not connected" });
+    }
+
     const url = `https://graph.facebook.com/v20.0/${pageId}`;
+    const params = {
+      fields: "name,fan_count,followers_count,engagement",
+      access_token: acc.accessToken,
+    };
 
-    const params = { fields: 'name,fan_count,followers_count,engagement', access_token: acc.accessToken };
-    const axios = require('axios');
     const response = await axios.get(url, { params });
+
     return res.json({ success: true, metrics: response.data });
   } catch (err) {
     console.error(err.response?.data || err.message);
