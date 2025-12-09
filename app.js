@@ -7,6 +7,7 @@ import connectDB from "./config/db.js";
 import userRoutes from "./routes/user.routes.js";
 import socialRoutes from "./routes/social.routes.js";
 import * as facebookController from "./controllers/social.controller.js";
+import instagramRoutes from "./routes/instagram.routes.js";
 
 dotenv.config();
 connectDB();
@@ -37,6 +38,7 @@ app.use(cookieParser());
 
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
+app.use("/social/instagram", instagramRoutes);
 
 // publish & metrics
 app.post('/publish/facebook', facebookController.publish);

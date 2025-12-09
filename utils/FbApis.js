@@ -29,10 +29,15 @@ async function exchangeCodeForToken({ clientId, clientSecret, redirectUri, code 
 }
 
 async function getUserPages(accessToken) {
-    const url = `${FB_GRAPH}/me/accounts?access_token=${accessToken}`;
-    const res = await axios.get(url);
-    return res.data; // list of pages
-}
+    const url = `https://graph.facebook.com/v20.0/me/accounts`;
+    const params = {
+        access_token: accessToken,
+        fields: "id,name,access_token,picture{url}" // removed perms
+    };
+
+    const res = await axios.get(url, { params });
+    return res.data; // { data: [...] }
+};
 
 // Example: publish to a page
 async function publishToPage({ pageAccessToken, pageId, message }) {
@@ -56,4 +61,4 @@ async function getPagePosts(pageId, accessToken) {
     return res.data.data || [];
 }
 
-module.exports = { getAuthUrl,exchangeCodeForToken,getUserPages,publishToPage,getPageDetails,getPagePosts};
+module.exports = { getAuthUrl, exchangeCodeForToken, getUserPages, publishToPage, getPageDetails, getPagePosts };

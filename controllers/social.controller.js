@@ -7,7 +7,6 @@ import fbApi from "../utils/FbApis.js";
 import mongoose from "mongoose";
 import axios from "axios";
 
-
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
 export const authRedirect = (req, res) => {
@@ -83,7 +82,11 @@ export const callback = async (req, res) => {
           providerId: page.id,
           accessToken: page.access_token || accessToken,
           scopes: page.perms || [],
-          meta: page
+         // meta: page
+           meta: {
+            ...page,
+            picture: page.picture?.data?.url // store the actual URL
+          }
         },
         { upsert: true, new: true }
       );
@@ -119,7 +122,7 @@ export const publish = async (req, res) => {
 
 export const metrics = async (req, res) => {
   try {
-    const { pageId } = req.params;  
+    const { pageId } = req.params;
 
     const acc = await SocialAccount.findOne({
       providerId: pageId,
