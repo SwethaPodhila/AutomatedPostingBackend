@@ -41,7 +41,7 @@ app.use("/social", socialRoutes);
 app.use("/social/instagram", instagramRoutes);
 
 // publish & metrics
-app.post('/publish/facebook', facebookController.publish);
+//app.post('/publish/facebook', facebookController.publish);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server running on port ${process.env.PORT} 🚀`);
