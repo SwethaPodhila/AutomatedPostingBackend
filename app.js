@@ -20,6 +20,8 @@ import {
   disconnectTwitter
 } from "./controllers/twitter.controller.js";
 
+app.set('trust proxy', 1);
+
 dotenv.config();
 connectDB();
 
@@ -64,27 +66,37 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb")
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ Mongo Error:", err));
 
-  app.use(
+ 
+// =========================
+//  🔐 SESSION STORE (PRODUCTION FIX)
+// =========================
+const store = MongoStore.create({
+  mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb",
+  collectionName: "twitter_sessions",
+  ttl: 0,
+  autoRemove: "disabled"
+});
+ 
+store.on('error', function(error) {
+  console.error('❌ Session Store Error:', error);
+});
+ 
+app.use(
   session({
     name: "twitter_session",
     secret: process.env.SESSION_SECRET || "super-secret-key-change-this",
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb",
-      collectionName: "twitter_sessions",
-      ttl: 0,
-      autoRemove: "disabled"
-    }),
+    resave: true, // 🚨 true for production
+    saveUninitialized: true, // 🚨 true for production
+    store: store,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24 * 365 * 10,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "1ax"
+      secure: true, // 🚨 ALWAYS true for HTTPS
+      sameSite: "none"
     }
   })
 );
-
+ 
 // =========================
 //  📌 TWITTER ROUTES
 // =========================
@@ -92,12 +104,23 @@ app.get("/auth/twitter", twitterAuth);
 app.get("/auth/twitter/callback", twitterCallback);
 app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
-app.get("/auth/twitter/account/:userId", checkTwitterConnection); // ✅ ADD THIS
+app.get("/auth/twitter/account/:userId", checkTwitterConnection);
 app.post("/api/twitter/disconnect", disconnectTwitter);
-
+ 
 // =========================
 //  📌 HEALTH
 // =========================
 app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });
+});
+ 
+// =========================
+//  🚀 START SERVER
+// =========================
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server started on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔐 Secure cookies: true`);
+  console.log(`🔄 Trust proxy: enabled`);
 });
