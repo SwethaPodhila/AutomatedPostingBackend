@@ -7,29 +7,24 @@ import { getLongLivedToken } from "../utils/instagramApi.js";
  * Redirect user to FB OAuth dialog (request IG + pages scopes)
  */
 export const redirectToLogin = async (req, res) => {
-  try {
-    const { userId } = req.query;
-    const scopes = [
-      "instagram_basic",
-      "pages_show_list",
-      "pages_read_engagement",
-      "instagram_content_publish",
-      "instagram_manage_comments",
-      "instagram_manage_insights",
-      "public_profile"
-    ].join(",");
+  const { userId } = req.query;
+  const scopes = [
+    "instagram_basic",
+    "pages_show_list",
+    "pages_read_engagement",
+    "instagram_content_publish",
+    "instagram_manage_comments",
+    "instagram_manage_insights",
+    "public_profile"
+  ].join(",");
 
-    const fbLoginUrl = `https://www.facebook.com/v21.0/dialog/oauth`
-      + `?client_id=${process.env.FB_APP_ID}`
-      + `&redirect_uri=${encodeURIComponent(process.env.SERVER_URL + "/social/instagram/callback")}`
-      + `&scope=${encodeURIComponent(scopes)}`
-      + `&state=${encodeURIComponent(userId)}`;
+  const fbLoginUrl = `https://www.facebook.com/v21.0/dialog/oauth`
+    + `?client_id=${process.env.FB_APP_ID}`
+    + `&redirect_uri=${encodeURIComponent(process.env.SERVER_URL + "/social/instagram/callback")}`
+    + `&scope=${encodeURIComponent(scopes)}`
+    + `&state=${encodeURIComponent(userId)}`;
 
-    return res.redirect(fbLoginUrl);
-  } catch (err) {
-    console.error("IG Redirect Error:", err);
-    return res.status(500).send("Redirect error");
-  }
+  return res.redirect(fbLoginUrl);
 };
 
 /**
