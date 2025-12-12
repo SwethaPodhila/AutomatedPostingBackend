@@ -80,7 +80,7 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb")
       maxAge: 1000 * 60 * 60 * 24 * 365 * 10,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "none"
+      sameSite: "1ax"
     }
   })
 );
