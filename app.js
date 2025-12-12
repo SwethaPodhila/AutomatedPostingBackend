@@ -20,12 +20,14 @@ import {
   disconnectTwitter
 } from "./controllers/twitter.controller.js";
 
-app.set('trust proxy', 1);
+
 
 dotenv.config();
 connectDB();
 
 const app = express();
+
+app.set('trust proxy', 1);
 
 // ✅ CORS setup for multiple origins
 const allowedOrigins = [
