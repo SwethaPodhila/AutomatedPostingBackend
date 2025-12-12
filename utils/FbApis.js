@@ -1,11 +1,11 @@
-const axios = require('axios');
-const qs = require('querystring');
+import axios from "axios";
+import qs from "querystring";
 
 const FB_OAUTH_URL = 'https://www.facebook.com/v17.0/dialog/oauth';
 const FB_TOKEN_URL = 'https://graph.facebook.com/v17.0/oauth/access_token';
 const FB_GRAPH = 'https://graph.facebook.com/v17.0';
 
-function getAuthUrl({ clientId, redirectUri, state, scopes = [] }) {
+export function getAuthUrl({ clientId, redirectUri, state, scopes = [] }) {
     const params = {
         client_id: clientId,
         redirect_uri: redirectUri,
@@ -16,7 +16,7 @@ function getAuthUrl({ clientId, redirectUri, state, scopes = [] }) {
     return `${FB_OAUTH_URL}?${qs.stringify(params)}`;
 }
 
-async function exchangeCodeForToken({ clientId, clientSecret, redirectUri, code }) {
+export async function exchangeCodeForToken({ clientId, clientSecret, redirectUri, code }) {
     const params = {
         client_id: clientId,
         client_secret: clientSecret,
@@ -25,40 +25,33 @@ async function exchangeCodeForToken({ clientId, clientSecret, redirectUri, code 
     };
     const url = `${FB_TOKEN_URL}?${qs.stringify(params)}`;
     const res = await axios.get(url);
-    return res.data; // contains access_token, token_type, expires_in
-}
-
-async function getUserPages(accessToken) {
-    const url = `https://graph.facebook.com/v20.0/me/accounts`;
-    const params = {
-        access_token: accessToken,
-        fields: "id,name,access_token,picture{url}" // removed perms
-    };
-
-    const res = await axios.get(url, { params });
-    return res.data; // { data: [...] }
-};
-
-// Example: publish to a page
-async function publishToPage({ pageAccessToken, pageId, message }) {
-    const url = `${FB_GRAPH}/${pageId}/feed`;
-    const res = await axios.post(url, null, { params: { message, access_token: pageAccessToken } });
     return res.data;
 }
 
-async function getPageDetails(pageId, accessToken) {
+export async function getUserPages(accessToken) {
+    const url = `${FB_GRAPH}/me/accounts?access_token=${accessToken}`;
+    const res = await axios.get(url);
+    return res.data;
+}
+
+export async function publishToPage({ pageAccessToken, pageId, message }) {
+    const url = `${FB_GRAPH}/${pageId}/feed`;
+    const res = await axios.post(url, null, {
+        params: { message, access_token: pageAccessToken }
+    });
+    return res.data;
+}
+
+export async function getPageDetails(pageId, accessToken) {
     const fields = 'id,name,fan_count,followers_count,link';
     const url = `${FB_GRAPH}/${pageId}?fields=${fields}&access_token=${accessToken}`;
     const res = await axios.get(url);
     return res.data;
 }
 
-// Get recent posts with likes/engagement
-async function getPagePosts(pageId, accessToken) {
+export async function getPagePosts(pageId, accessToken) {
     const fields = 'id,message,created_time,likes.summary(true)';
     const url = `${FB_GRAPH}/${pageId}/posts?fields=${fields}&access_token=${accessToken}`;
     const res = await axios.get(url);
     return res.data.data || [];
 }
-
-module.exports = { getAuthUrl, exchangeCodeForToken, getUserPages, publishToPage, getPageDetails, getPagePosts };

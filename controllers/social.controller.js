@@ -3,9 +3,13 @@ dotenv.config();
 
 import User from "../models/users.js";
 import SocialAccount from "../models/socialAccount.js";
-import fbApi from "../utils/FbApis.js";
+//import fbApi from "../utils/FbApis.js";
+import * as fbApi from "../utils/FbApis.js";
 import mongoose from "mongoose";
 import axios from "axios";
+import fs from "fs";
+import multer from "multer";
+const upload = multer({ dest: "uploads/" });
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
@@ -82,8 +86,8 @@ export const callback = async (req, res) => {
           providerId: page.id,
           accessToken: page.access_token || accessToken,
           scopes: page.perms || [],
-         // meta: page
-           meta: {
+          // meta: page
+          meta: {
             ...page,
             picture: page.picture?.data?.url // store the actual URL
           }
@@ -102,19 +106,57 @@ export const callback = async (req, res) => {
   }
 };
 
-// 3) Publish endpoint
 export const publish = async (req, res) => {
   try {
-    const { pageId, message } = req.body;
-    const acc = await SocialAccount.findOne({ providerId: pageId, platform: 'facebook' });
-    if (!acc) return res.status(404).json({ msg: 'Page not connected' });
+    console.log("===== Publish Request =====");
+    console.log("Body:", req.body);       // Log all body data
+    console.log("File:", req.file);       // Log uploaded file info if any
+
+    const { pageId, message, aiPrompt } = req.body;
+    const imageFile = req.file; // multer puts uploaded file here
+
+    if (!pageId) {
+      console.log("❌ Missing pageId!");
+      return res.status(400).json({ msg: "Missing pageId" });
+    }
+
+    const acc = await SocialAccount.findOne({ providerId: pageId, platform: "facebook" });
+    if (!acc) {
+      console.log("❌ Page not connected");
+      return res.status(404).json({ msg: "Page not connected" });
+    }
 
     const pageToken = acc.accessToken;
-    const result = await fbApi.publishToPage({ pageAccessToken: pageToken, pageId, message });
+    console.log("Page Access Token:", pageToken ? "FOUND" : "NOT FOUND");
+
+    let imageStream = null;
+    if (imageFile) {
+      console.log("✅ Image file detected:", imageFile.originalname);
+      // Convert uploaded file to stream for Facebook API
+      imageStream = fs.createReadStream(imageFile.path);
+    } else {
+      console.log("No image uploaded, posting text only");
+    }
+
+    const result = await fbApi.publishToPage({
+      pageAccessToken: pageToken,
+      pageId,
+      message,
+      imageFile: imageStream,
+    });
+
+    console.log("✅ Facebook API Response:", result);
+
+    // Delete uploaded file after use
+    if (imageFile) {
+      fs.unlinkSync(imageFile.path);
+      console.log("✅ Temporary image file deleted");
+    }
+
     return res.json({ success: true, result });
   } catch (err) {
-    console.error(err.response?.data || err.message);
-    return res.status(500).json({ success: false, error: 'Publish failed' });
+    console.error("❌ Publish error:", err.response?.data || err.message);
+    return res.status(500).json({ success: false, error: "Publish failed" });
   }
 };
 

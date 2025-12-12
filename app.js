@@ -8,6 +8,17 @@ import userRoutes from "./routes/user.routes.js";
 import socialRoutes from "./routes/social.routes.js";
 import * as facebookController from "./controllers/social.controller.js";
 import instagramRoutes from "./routes/instagram.routes.js";
+import mongoose from "mongoose";
+import session from "express-session";
+import MongoStore from "connect-mongo";
+
+import {
+  twitterAuth,
+  twitterCallback,
+  checkTwitterConnection,
+  postToTwitter,
+  disconnectTwitter
+} from "./controllers/twitter.controller.js";
 
 dotenv.config();
 connectDB();
@@ -21,10 +32,10 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-  origin: function(origin, callback){
+  origin: function (origin, callback) {
     // allow requests with no origin like Postman
-    if(!origin) return callback(null, true);
-    if(allowedOrigins.indexOf(origin) === -1){
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
       const msg = `The CORS policy for this site does not allow access from the specified Origin.`;
       return callback(new Error(msg), false);
     }
@@ -41,8 +52,51 @@ app.use("/social", socialRoutes);
 app.use("/social/instagram", instagramRoutes);
 
 // publish & metrics
-app.post('/publish/facebook', facebookController.publish);
+//app.post('/publish/facebook', facebookController.publish);
 
 app.listen(process.env.PORT, () => {
   console.log(`Server running on port ${process.env.PORT} 🚀`);
+});
+
+// Twitter routes
+mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb")
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ Mongo Error:", err));
+
+  app.use(
+  session({
+    name: "twitter_session",
+    secret: process.env.SESSION_SECRET || "super-secret-key-change-this",
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb",
+      collectionName: "twitter_sessions",
+      ttl: 0,
+      autoRemove: "disabled"
+    }),
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24 * 365 * 10,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "none"
+    }
+  })
+);
+
+// =========================
+//  📌 TWITTER ROUTES
+// =========================
+app.get("/auth/twitter", twitterAuth);
+app.get("/auth/twitter/callback", twitterCallback);
+app.get("/api/twitter/check", checkTwitterConnection);
+app.post("/api/twitter/post", postToTwitter);
+app.get("/auth/twitter/account/:userId", checkTwitterConnection); // ✅ ADD THIS
+app.post("/api/twitter/disconnect", disconnectTwitter);
+
+// =========================
+//  📌 HEALTH
+// =========================
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date() });
 });

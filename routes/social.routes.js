@@ -1,9 +1,12 @@
 import express from "express";
 import * as controller from "../controllers/social.controller.js";
 import SocialAccount from "../models/socialAccount.js";
+import multer from "multer";
 
 const router = express.Router();
+const upload = multer({ dest: "uploads/" }); 
 
+router.post("/publish/facebook", upload.single("image"), controller.publish);
 router.get("/facebook", controller.authRedirect);
 router.get("/facebook/callback", controller.callback);
 
