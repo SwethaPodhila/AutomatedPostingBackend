@@ -77,6 +77,7 @@ export const callback = async (req, res) => {
     // Save each page
     for (const page of pages.data || []) {
       console.log("Saving page:", page.id, "for user:", userId);
+      const pictureUrl = await fbApi.getPagePicture(page.id, page.access_token);
 
       const saved = await SocialAccount.findOneAndUpdate(
         { providerId: page.id, platform: "facebook" },
@@ -89,7 +90,7 @@ export const callback = async (req, res) => {
           // meta: page
           meta: {
             ...page,
-            picture: page.picture?.data?.url // store the actual URL
+            picture: pictureUrl // store the actual URL
           }
         },
         { upsert: true, new: true }

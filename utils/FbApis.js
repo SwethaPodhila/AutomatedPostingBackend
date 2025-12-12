@@ -49,6 +49,12 @@ export async function getPageDetails(pageId, accessToken) {
     return res.data;
 }
 
+export async function getPagePicture(pageId, accessToken) {
+    const url = `${FB_GRAPH}/${pageId}?fields=picture{url}&access_token=${accessToken}`;
+    const res = await axios.get(url);
+    return res?.data?.picture?.data?.url || null;
+}
+
 export async function getPagePosts(pageId, accessToken) {
     const fields = 'id,message,created_time,likes.summary(true)';
     const url = `${FB_GRAPH}/${pageId}/posts?fields=${fields}&access_token=${accessToken}`;
