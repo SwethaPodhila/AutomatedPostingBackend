@@ -58,7 +58,7 @@ export const twitterAuth = async (req, res) => {
   }
 };
 // =========================
-// 2️⃣ Twitter Callback (FIXED Session Check) - ONLY CHANGE HERE
+// 2️⃣ Twitter Callback (FIXED Session Check)
 // =========================
 export const twitterCallback = async (req, res) => {
   try {
@@ -115,20 +115,10 @@ export const twitterCallback = async (req, res) => {
       });
     });
  
-    // ✅✅✅✅ ONLY CHANGE STARTS HERE ✅✅✅✅
-// Remove the FRONTEND redirect and replace with Android deep link
-const redirectUrl =
-  `aimediahub://twitter-callback` +
-  `?twitter_id=${user.data.id}` +
-  `&username=${user.data.username}` +
-  `&name=${encodeURIComponent(user.data.name)}` +
-  `&user_id=${userId}` +
-  `&access_token=${accessToken}` +  // 🆕 Android wants this!
-  `&refresh_token=${refreshToken}` + // 🆕 Optional: include refresh token too
-  `&profile_image=${user.data.profile_image_url || ''}`; // 🆕 Optional: profile image
- 
-return res.redirect(redirectUrl);
-// ✅✅✅✅ ONLY CHANGE ENDS HERE ✅✅✅✅
+    // ✅ REDIRECT TO FRONTEND WITH SUCCESS
+    res.redirect(
+      `${FRONTEND_URL}/twitter-manager?twitter=connected&username=${user.data.username}&userId=${userId}`
+    );
  
   } catch (err) {
     console.error("❌ Twitter Callback Error:", err);
