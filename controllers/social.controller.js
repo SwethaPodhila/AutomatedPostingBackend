@@ -91,7 +91,7 @@ export const callback = async (req, res) => {
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
-      redirect_uri: process.env.IG_REDIRECT_URI,
+      redirectUri: FB_REDIRECT_URI,
       code,
     });
 
@@ -427,7 +427,7 @@ export const instagramCallback = async (req, res) => {
       );
     }
 
-    return res.redirect(`${process.env.FRONTEND_URL}/instagram-dashboard`);
+    return res.redirect(`${process.env.FRONTEND_URL}/success`);
   } catch (err) {
     console.error("IG CALLBACK ERROR:", err.response?.data || err.message);
     return res.status(500).send("Instagram callback failed");
