@@ -328,8 +328,15 @@ export const disconnectAccount = async (req, res) => {
 
 //instagram metrics connection callback 
 export const instagramAuthRedirect = (req, res) => {
+  console.log("🔥 INSTAGRAM AUTH REDIRECT HIT 🔥");
+
   const { userId } = req.query;
-  if (!userId) return res.status(400).send("Missing userId");
+  console.log("userId:", userId);
+
+  const redirectUri =
+    "https://automatedpostingbackend.onrender.com/social/instagram/callback";
+
+  console.log("redirectUri:", redirectUri);
 
   const scopes = [
     "instagram_basic",
@@ -341,11 +348,11 @@ export const instagramAuthRedirect = (req, res) => {
   const url =
     `https://www.facebook.com/v20.0/dialog/oauth` +
     `?client_id=${process.env.FB_APP_ID}` +
-    `&redirect_uri=${encodeURIComponent(
-      "https://automatedpostingbackend.onrender.com/social/instagram/callback"
-    )}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${encodeURIComponent(userId)}` +
     `&scope=${scopes.join(",")}`;
+
+  console.log("FB AUTH URL:", url);
 
   return res.redirect(url);
 };
