@@ -334,7 +334,7 @@ export const instagramAuthRedirect = (req, res) => {
   console.log("userId:", userId);
 
   const redirectUri =
-    "https://automatedpostingbackend.onrender.com/social/facebook/callback";
+    "https://automatedpostingbackend.onrender.com/social/instagram/callback";
 
   console.log("redirectUri:", redirectUri);
 
