@@ -110,21 +110,25 @@ export const callback = async (req, res) => {
       const pictureUrl = await fbApi.getPagePicture(page.id, page.access_token);
 
       const saved = await SocialAccount.findOneAndUpdate(
-        { user: userObjectId, platform: "facebook" },
+        {
+          user: userObjectId,
+          platform: "facebook",
+          providerId: page.id   // ✅ MUST
+        },
         {
           user: userObjectId,
           platform: "facebook",
           providerId: page.id,
           accessToken: page.access_token || accessToken,
           scopes: page.perms || [],
-          // meta: page
           meta: {
             ...page,
-            picture: pictureUrl // store the actual URL
+            picture: pictureUrl
           }
         },
         { upsert: true, new: true }
       );
+
 
       console.log("Saved page:", saved);
     }
@@ -257,13 +261,15 @@ export const getPages = async (req, res) => {
 
 export const generateAICaption = async (req, res) => {
   try {
+    console.log("🔥 AI GENERATE CAPTION HIT 🔥");
+    console.log("KEY:", process.env.OPENROUTER_KEY);
     const { prompt } = req.body;
     if (!prompt) return res.status(400).json({ msg: "Prompt is required" });
 
     const apiRes = await axios.post(
       "https://openrouter.ai/api/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "openai/gpt-3.5-turbo",
         messages: [
           {
             role: "user",
@@ -276,6 +282,8 @@ export const generateAICaption = async (req, res) => {
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_KEY}`,
           "Content-Type": "application/json",
+          "HTTP-Referer": process.env.FRONTEND_URL, // or frontend URL
+          "X-Title": "Automated Posting App"
         },
       }
     );
