@@ -427,7 +427,7 @@ export const instagramCallback = async (req, res) => {
       );
     }
 
-    return res.redirect(`${process.env.FRONTEND_URL}/success`);
+    return res.redirect(`${process.env.FRONTEND_URL}/instagram-dashboard`);
   } catch (err) {
     console.error("IG CALLBACK ERROR:", err.response?.data || err.message);
     return res.status(500).send("Instagram callback failed");
