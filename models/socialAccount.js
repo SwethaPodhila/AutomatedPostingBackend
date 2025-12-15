@@ -10,6 +10,5 @@ const SocialAccountSchema = new mongoose.Schema({
     meta: Object,
     createdAt: { type: Date, default: Date.now }
 });
-SocialAccountSchema.index({ user: 1, platform: 1 }, { unique: true });
 
 module.exports = mongoose.model('SocialAccount', SocialAccountSchema);

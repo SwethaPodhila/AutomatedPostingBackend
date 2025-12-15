@@ -30,17 +30,19 @@ router.get("/:userId", async (req, res) => {
 });
 
 // DELETE a specific platform (facebook / instagram)
-router.delete("/:platform/:userId", async (req, res) => {
-    try {
-        const { platform, userId } = req.params;
+router.post("/:platform/disconnect", controller.disconnectAccount);
 
-        await SocialAccount.deleteMany({ user: userId, platform });
+router.get("/posts/:userId", controller.getPostedPosts);
 
-        return res.json({ success: true, message: `${platform} disconnected` });
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false });
-    }
-});
+// Instagram connect (uses FB login internally)
+router.get("/instagram/connect", controller.instagramAuthRedirect);
+router.get("/instagram/callback", controller.instagramCallback);
+
+// Instagram publish
+router.post("/publish/instagram", upload.single("image"), controller.publishInstagram);
+
+// Instagram metrics
+router.get("/instagram/metrics/:userId", controller.instagramMetrics);
 
 export default router;
+ 

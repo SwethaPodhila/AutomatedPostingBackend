@@ -53,7 +53,6 @@ app.use(cookieParser());
 
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
-app.use("/social/instagram", instagramRoutes);
 
 
 // publish & metrics
