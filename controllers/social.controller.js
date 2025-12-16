@@ -65,29 +65,18 @@ export const authRedirect = (req, res) => {
   return res.redirect(url);
 };
 
-// 2) Callback: exchange code -> token, list pages, save tokens
 export const callback = async (req, res) => {
   try {
     console.log("===== FACEBOOK CALLBACK HIT =====");
     console.log("FULL QUERY:", req.query);
-    console.log("Code:", req.query.code);
-    console.log("State received:", req.query.state);
 
     const { code, state } = req.query;
-    const userId = decodeURIComponent(state);
-
-    console.log("Decoded userId:", userId);
 
     if (!code) return res.status(400).send("Missing code");
-    if (!userId) return res.status(400).send("Missing userId");
+    if (!state) return res.status(400).send("Missing userId");
 
-    // ❌ REMOVE ObjectId conversion
-    // let userObjectId = mongoose.Types.ObjectId(userId);
+    const userId = state; // ✅ DO NOT decode
 
-    // ✅ Just keep userId as string
-    const userObjectId = userId;
-
-    // Exchange code for access token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
@@ -98,29 +87,26 @@ export const callback = async (req, res) => {
     const accessToken = tokenRes.access_token;
     if (!accessToken) return res.status(500).send("Failed to get access token");
 
-    // Get user's Facebook pages
     const pages = await fbApi.getUserPages(accessToken);
-    if (!pages.data || pages.data.length === 0) {
-      console.log("No Facebook pages found for user:", userId);
-    }
 
-    // Save each page
     for (const page of pages.data || []) {
-      console.log("Saving page:", page.id, "for user:", userId);
-      const pictureUrl = await fbApi.getPagePicture(page.id, page.access_token);
+      const pictureUrl = await fbApi.getPagePicture(
+        page.id,
+        page.access_token || accessToken
+      );
 
-      const saved = await SocialAccount.findOneAndUpdate(
+      await SocialAccount.findOneAndUpdate(
         {
-          user: userObjectId,
+          user: userId,
           platform: "facebook",
-          providerId: page.id   // ✅ MUST
+          providerId: page.id
         },
         {
-          user: userObjectId,
+          user: userId,
           platform: "facebook",
           providerId: page.id,
           accessToken: page.access_token || accessToken,
-          scopes: page.perms || [],
+          scopes: page.tasks || [],
           meta: {
             ...page,
             picture: pictureUrl
@@ -128,13 +114,9 @@ export const callback = async (req, res) => {
         },
         { upsert: true, new: true }
       );
-
-
-      console.log("Saved page:", saved);
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
-
   } catch (err) {
     console.error("Callback Error ==>", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
