@@ -117,7 +117,6 @@ app.get("/auth/twitter/callback", twitterCallback);
 app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
 app.post("/api/twitter/disconnect", disconnectTwitter);
-app.get("/api/twitter/posts", getTwitterPosts);
 app.get("/api/twitter/verify-session", verifyAndroidSession);
 
 // =========================
