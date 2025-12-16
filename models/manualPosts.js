@@ -27,8 +27,15 @@ const PostedPostSchema = new mongoose.Schema(
       type: String,
     },
 
-    imageName: {
-      type: String, // only filename
+    // ✅ PUBLIC CLOUDINARY URL
+    mediaUrl: {
+      type: String,
+    },
+
+    // ✅ image OR video
+    mediaType: {
+      type: String,
+      enum: ["image", "video"],
     },
 
     postId: {

@@ -2,11 +2,34 @@ import express from "express";
 import * as controller from "../controllers/social.controller.js";
 import SocialAccount from "../models/socialAccount.js";
 import multer from "multer";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import cloudinary from "../config/cloudinary.js";
 
 const router = express.Router();
-const upload = multer({ dest: "uploads/" }); 
 
-router.post("/publish/facebook", upload.single("image"), controller.publish);
+const storage = new CloudinaryStorage({
+    cloudinary,
+    params: async (req, file) => {
+        const isVideo = file.mimetype.startsWith("video");
+
+        return {
+            folder: "automation_posts",
+            resource_type: isVideo ? "video" : "image",
+            allowed_formats: isVideo
+                ? ["mp4", "mov", "webm"]
+                : ["jpg", "png", "jpeg", "webp"],
+        };
+    },
+});
+
+const upload = multer({ storage });
+
+router.post(
+    "/publish/facebook",
+    upload.single("media"), // 🔥 image OR video
+    controller.publish
+);
+
 router.get("/facebook", controller.authRedirect);
 router.get("/facebook/callback", controller.callback);
 router.post("/ai-generate", controller.generateAICaption);
@@ -45,4 +68,3 @@ router.post("/publish/instagram", upload.single("image"), controller.publishInst
 router.get("/instagram/metrics/:userId", controller.instagramMetrics);
 
 export default router;
- 

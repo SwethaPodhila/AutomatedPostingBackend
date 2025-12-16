@@ -55,35 +55,58 @@ export async function publishToPage({
     pageAccessToken,
     pageId,
     message,
-    imageFile,
+    mediaUrl,     // ✅ public Cloudinary URL
+    mediaType,    // ✅ "image" | "video"
     scheduleTime,
 }) {
     try {
-        // ========== IMAGE POST ==========
-        if (imageFile) {
-            const form = new FormData();
-            form.append("message", message || "");
-            form.append("source", fs.createReadStream(imageFile.path));
-            form.append("access_token", pageAccessToken); // ✅ MUST
+        // ================= IMAGE POST =================
+        if (mediaUrl && mediaType === "image") {
+            const params = {
+                url: mediaUrl,              // 🔥 PUBLIC URL
+                caption: message || "",
+                access_token: pageAccessToken,
+            };
 
             if (scheduleTime) {
-                form.append("published", "false");
-                form.append(
-                    "scheduled_publish_time",
-                    Math.floor(new Date(scheduleTime).getTime() / 1000)
-                );
+                params.published = false;
+                params.scheduled_publish_time =
+                    Math.floor(new Date(scheduleTime).getTime() / 1000);
             }
 
             const res = await axios.post(
                 `${FB_GRAPH}/${pageId}/photos`,
-                form,
-                { headers: form.getHeaders() }
+                null,
+                { params }
             );
 
             return res.data;
         }
 
-        // ========== TEXT POST ==========
+        // ================= VIDEO POST =================
+        if (mediaUrl && mediaType === "video") {
+            const params = {
+                file_url: mediaUrl,          // 🔥 PUBLIC URL
+                description: message || "",
+                access_token: pageAccessToken,
+            };
+
+            if (scheduleTime) {
+                params.published = false;
+                params.scheduled_publish_time =
+                    Math.floor(new Date(scheduleTime).getTime() / 1000);
+            }
+
+            const res = await axios.post(
+                `${FB_GRAPH}/${pageId}/videos`,
+                null,
+                { params }
+            );
+
+            return res.data;
+        }
+
+        // ================= TEXT POST =================
         const params = {
             message,
             access_token: pageAccessToken,
@@ -107,6 +130,7 @@ export async function publishToPage({
         throw err;
     }
 }
+
 
 export async function getPageDetails(pageId, accessToken) {
     const fields = 'id,name,fan_count,followers_count,link';

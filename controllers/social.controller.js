@@ -10,36 +10,6 @@ import multer from "multer";
 import { publishToPage } from "../utils/FbApis.js";
 import PostedPost from "../models/manualPosts.js";
 import schedule from "node-schedule";
-import AWS from "aws-sdk";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
-// Configure AWS S3
-const s3 = new S3Client({
-  region: process.env.AWS_REGION,
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
-const uploadToS3 = async (file) => {
-  const fileStream = fs.createReadStream(file.path);
-  const params = {
-    Bucket: process.env.S3_BUCKET_NAME,
-    Key: `instagram_posts/${Date.now()}_${file.originalname}`,
-    Body: fileStream,
-    ContentType: file.mimetype,
-    ACL: "public-read",
-  };
-
-  const command = new PutObjectCommand(params);
-  await s3.send(command);
-
-  fs.unlinkSync(file.path);
-  return `https://${process.env.S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${params.Key}`;
-};
-
-const upload = multer({ dest: "uploads/" });
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
@@ -126,13 +96,13 @@ export const callback = async (req, res) => {
 export const publish = async (req, res) => {
   try {
     const { pageId, message, userId, scheduleTime } = req.body;
-    const imageFile = req.file; // multer image
+    const media = req.file;
 
     if (!pageId)
       return res.status(400).json({ msg: "Missing pageId" });
 
-    if (!message && !imageFile)
-      return res.status(400).json({ msg: "Message or image required" });
+    if (!message && !media)
+      return res.status(400).json({ msg: "Message or media required" });
 
     const acc = await SocialAccount.findOne({
       providerId: pageId,
@@ -142,41 +112,42 @@ export const publish = async (req, res) => {
     if (!acc)
       return res.status(404).json({ msg: "Page not connected" });
 
-    console.log("PAGE:", pageId);
-    console.log("MESSAGE:", message);
-    console.log("IMAGE:", imageFile?.originalname || "NO");
-    console.log("SCHEDULE:", scheduleTime || "IMMEDIATE");
+    const mediaUrl = media ? media.path : null;
+    const mediaType = media
+      ? media.mimetype.startsWith("video")
+        ? "video"
+        : "image"
+      : null;
+
+    console.log("MEDIA TYPE:", mediaType);
+    console.log("MEDIA URL:", mediaUrl);
 
     const result = await publishToPage({
       pageAccessToken: acc.accessToken,
       pageId,
       message,
-      imageFile,
+      mediaUrl,
+      mediaType,
       scheduleTime,
     });
 
-    // 🔹 Save post in DB
     await PostedPost.create({
-      user: userId, // frontend nundi pampali
+      user: userId,
       platform: "facebook",
       pageId,
-      pageName: acc.name || "",
       message,
-      imageName: imageFile?.originalname || null,
-      postId: result?.id || null,
-      scheduledTime: scheduleTime || null,
+      mediaUrl,
+      mediaType,
       status: scheduleTime ? "scheduled" : "posted",
     });
 
-    // delete temp image
-    if (imageFile) fs.unlinkSync(imageFile.path);
-
     return res.json({ success: true, result });
   } catch (err) {
-    console.error("PUBLISH ERROR:", err.response?.data || err.message);
+    console.error("PUBLISH ERROR:", err.message);
     return res.status(500).json({ success: false });
   }
 };
+
 
 export const getPostedPosts = async (req, res) => {
   try {
