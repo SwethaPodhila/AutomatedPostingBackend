@@ -7,7 +7,6 @@ import connectDB from "./config/db.js";
 import userRoutes from "./routes/user.routes.js";
 import socialRoutes from "./routes/social.routes.js";
 import * as facebookController from "./controllers/social.controller.js";
-import instagramRoutes from "./routes/instagram.routes.js";
 import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";

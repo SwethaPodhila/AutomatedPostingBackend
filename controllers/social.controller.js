@@ -426,6 +426,8 @@ export const instagramCallback = async (req, res) => {
 
 export const publishInstagram = async (req, res) => {
   try {
+    console.log("🔥 IG PUBLISH HIT 🔥");
+    console.log("AWS Credential : ", process.env.AWS_SECRET_ACCESS_KEY +" "+process.env.AWS_ACCESS_KEY_ID+" "+process.env.AWS_REGION+" "+process.env.S3_BUCKET_NAME); 
     const { userId, caption, scheduleTime } = req.body;
     const imageFile = req.file;
 
