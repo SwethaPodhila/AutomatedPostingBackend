@@ -10,6 +10,7 @@ import * as facebookController from "./controllers/social.controller.js";
 import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";
+import automationRoutes from "./routes/automation.routes.js";
 
 import {
   twitterAuth,
@@ -21,6 +22,15 @@ import {
 } from "./controllers/twitter.controller.js";
 
 
+// Method 1: Try named imports (most common)
+import {
+  linkedinAuth,
+  linkedinCallback,
+  checkLinkedInConnection,
+  postToLinkedIn,
+  disconnectLinkedIn,
+  getLinkedInPosts // ✅ ADDED NEW IMPORT
+} from "./controllers/linkedin.controller.js";
 
 dotenv.config();
 connectDB();
@@ -53,6 +63,7 @@ app.use(cookieParser());
 
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
+app.use("/automation", automationRoutes);
 
 
 // publish & metrics
@@ -67,7 +78,7 @@ mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb")
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ Mongo Error:", err));
 
- 
+
 // =========================
 //  🔐 SESSION STORE (PRODUCTION FIX)
 // =========================
@@ -77,11 +88,11 @@ const store = MongoStore.create({
   ttl: 0,
   autoRemove: "disabled"
 });
- 
-store.on('error', function(error) {
+
+store.on('error', function (error) {
   console.error('❌ Session Store Error:', error);
 });
- 
+
 app.use(
   session({
     name: "twitter_session",
@@ -97,17 +108,28 @@ app.use(
     }
   })
 );
- 
+
 // =========================
 //  📌 TWITTER ROUTES
 // =========================
-app.get("/auth/twitter", twitterAuth);
+app.get("/auth/twitter", twitterAuth); // ONLY ONE TIME
 app.get("/auth/twitter/callback", twitterCallback);
 app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
-app.get("/auth/twitter/account/:userId", checkTwitterConnection);
 app.post("/api/twitter/disconnect", disconnectTwitter);
+app.get("/api/twitter/posts", getTwitterPosts);
 app.get("/api/twitter/verify-session", verifyAndroidSession);
+
+// =========================
+//  📌 LINKEDIN ROUTES
+// =========================
+app.get("/auth/linkedin", linkedinAuth);
+app.get("/auth/linkedin/callback", linkedinCallback);
+app.get("/api/linkedin/check", checkLinkedInConnection);
+app.post("/api/linkedin/post", postToLinkedIn);
+app.get("/auth/linkedin/account/:userId", checkLinkedInConnection);
+app.post("/api/linkedin/disconnect", disconnectLinkedIn);
+app.get("/api/linkedin/posts", getLinkedInPosts);
 
 // =========================
 //  📌 HEALTH
@@ -115,7 +137,64 @@ app.get("/api/twitter/verify-session", verifyAndroidSession);
 app.get("/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date() });
 });
- 
+
+// =========================
+//  📌 DEBUG ENDPOINTS
+// =========================
+app.get("/debug/session", (req, res) => {
+  res.json({
+    sessionId: req.sessionID,
+    hasTwitterOAuth: !!req.session.twitterOAuth,
+    hasLinkedInOAuth: !!req.session.linkedinOAuth,
+    twitterOAuth: req.session.twitterOAuth,
+    linkedinOAuth: req.session.linkedinOAuth,
+    cookies: req.cookies
+  });
+});
+
+// Debug: Check database fields
+app.get('/debug/twitter/:userId', async (req, res) => {
+  try {
+    const account = await TwitterAccount.findOne({
+      user: req.params.userId,
+      platform: "twitter"
+    });
+
+    if (!account) {
+      return res.json({ error: "Account not found" });
+    }
+
+    res.json({
+      success: true,
+      loginPlatform: account.loginPlatform,
+      androidSessionId: account.androidSessionId,
+      hasLoginPlatform: 'loginPlatform' in account._doc,
+      hasAndroidSessionId: 'androidSessionId' in account._doc,
+      allFields: Object.keys(account._doc)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Debug: Force set platform to android
+app.get('/force-android/:userId', async (req, res) => {
+  try {
+    await TwitterAccount.findOneAndUpdate(
+      { user: req.params.userId, platform: "twitter" },
+      {
+        loginPlatform: "android",
+        androidSessionId: null
+      }
+    );
+    res.json({ success: true, message: "Forced to android" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 // =========================
 //  🚀 START SERVER
 // =========================
