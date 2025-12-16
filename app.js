@@ -16,7 +16,8 @@ import {
   twitterCallback,
   checkTwitterConnection,
   postToTwitter,
-  disconnectTwitter
+  disconnectTwitter,
+  verifyAndroidSession // ✅ ADDED
 } from "./controllers/twitter.controller.js";
 
 
@@ -106,7 +107,8 @@ app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
 app.get("/auth/twitter/account/:userId", checkTwitterConnection);
 app.post("/api/twitter/disconnect", disconnectTwitter);
- 
+app.get("/api/twitter/verify-session", verifyAndroidSession);
+
 // =========================
 //  📌 HEALTH
 // =========================
