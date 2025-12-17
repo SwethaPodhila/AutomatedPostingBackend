@@ -11,7 +11,7 @@ import { publishToPage } from "../utils/FbApis.js";
 import PostedPost from "../models/manualPosts.js";
 import schedule from "node-schedule";
 
-const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
+const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL ,ANDROID_REDIRECT_URI} = process.env;
 
 export const authRedirect = (req, res) => {
   const { userId, platform} = req.query;
