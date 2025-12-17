@@ -75,6 +75,8 @@ export const callback = async (req, res) => {
         page.access_token || accessToken
       );
 
+      const connectedFrom = platform === "android" ? "android" : "web";
+
       await SocialAccount.findOneAndUpdate(
         {
           user: userId,
