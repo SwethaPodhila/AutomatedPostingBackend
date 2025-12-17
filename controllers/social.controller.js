@@ -45,7 +45,7 @@ export const callback = async (req, res) => {
     console.log("===== FACEBOOK CALLBACK HIT =====");
     console.log("FULL QUERY:", req.query);
 
-    const { code, state } = req.query;
+    const { code, state,platform } = req.query;
 
     if (!code) return res.status(400).send("Missing code");
     if (!state) return res.status(400).send("Missing userId");
