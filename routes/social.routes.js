@@ -13,7 +13,7 @@ const storage = new CloudinaryStorage({
         const isVideo = file.mimetype.startsWith("video");
 
         return {
-            folder: "automation_posts",
+            folder: "automation_posts", // remove any extra slashes
             resource_type: isVideo ? "video" : "image",
             allowed_formats: isVideo
                 ? ["mp4", "mov", "webm"]
@@ -38,6 +38,27 @@ router.post("/ai-generate", controller.generateAICaption);
 router.get("/pages/:userId", controller.getPages);   // <-- new API
 router.get("/metrics/:pageId", controller.metrics);
 
+// DELETE a specific platform (facebook / instagram)
+router.post("/:platform/disconnect", controller.disconnectAccount);
+
+router.get("/posts/:userId", controller.getPostedPosts);
+
+// Instagram connect (uses FB login internally)
+router.get("/instagram/connect", controller.instagramAuthRedirect);
+router.get("/instagram/callback", controller.instagramCallback);
+
+// Instagram publish
+router.post(
+    "/publish/instagram",
+    upload.single("media"), // ✅ image OR video
+    controller.publishInstagram
+);
+
+
+// Instagram metrics
+router.get("/instagram/metrics/:userId", controller.instagramMetrics);
+
+
 // GET all connected accounts for user
 router.get("/:userId", async (req, res) => {
     try {
@@ -51,20 +72,5 @@ router.get("/:userId", async (req, res) => {
         return res.status(500).json({ success: false });
     }
 });
-
-// DELETE a specific platform (facebook / instagram)
-router.post("/:platform/disconnect", controller.disconnectAccount);
-
-router.get("/posts/:userId", controller.getPostedPosts);
-
-// Instagram connect (uses FB login internally)
-router.get("/instagram/connect", controller.instagramAuthRedirect);
-router.get("/instagram/callback", controller.instagramCallback);
-
-// Instagram publish
-router.post("/publish/instagram", upload.single("image"), controller.publishInstagram);
-
-// Instagram metrics
-router.get("/instagram/metrics/:userId", controller.instagramMetrics);
 
 export default router;

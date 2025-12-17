@@ -3,6 +3,11 @@ const SocialAccountSchema = new mongoose.Schema({
     user: { type: String, required: true },
     platform: { type: String, required: true },
     providerId: String, // facebook user id or page id
+    connectedFrom: {
+        type: String,
+        enum: ["web", "android"],
+        required: true
+    },
     accessToken: String,
     refreshToken: String, // FB issues long-lived tokens differently; keep field
     scopes: [String],

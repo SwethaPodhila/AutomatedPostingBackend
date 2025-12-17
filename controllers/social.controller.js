@@ -25,10 +25,15 @@ export const authRedirect = (req, res) => {
     "email"
   ];
 
+  const redirectUri =
+    platform === "android"
+      ? ANDROID_REDIRECT_URI   // ex: com.myapp://facebook/callback
+      : FB_REDIRECT_URI;      // web redirect
+
   const url =
     `https://www.facebook.com/v20.0/dialog/oauth` +
     `?client_id=${FB_APP_ID}` +
-    `&redirect_uri=${encodeURIComponent(FB_REDIRECT_URI)}` +
+    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${encodeURIComponent(userId)}` +
     `&scope=${scopes.join(",")}`;
 
@@ -47,10 +52,15 @@ export const callback = async (req, res) => {
 
     const userId = state; // ✅ DO NOT decode
 
+    const redirectUri =
+      platform === "android"
+        ? ANDROID_REDIRECT_URI
+        : FB_REDIRECT_URI;
+
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
-      redirectUri: FB_REDIRECT_URI,
+      redirectUri,   // ✅ IMPORTANT
       code,
     });
 
@@ -77,6 +87,7 @@ export const callback = async (req, res) => {
           providerId: page.id,
           accessToken: page.access_token || accessToken,
           scopes: page.tasks || [],
+          connectedFrom,
           meta: {
             ...page,
             picture: pictureUrl
@@ -86,7 +97,16 @@ export const callback = async (req, res) => {
       );
     }
 
+    if (platform === "android") {
+      return res.json({
+        success: true,
+        message: "Facebook connected successfully",
+        redirectUrl: "aimediahub://login-success",
+      });
+    }
+
     return res.redirect(`${FRONTEND_URL}/success`);
+
   } catch (err) {
     console.error("Callback Error ==>", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
@@ -397,22 +417,38 @@ export const instagramCallback = async (req, res) => {
 
 export const publishInstagram = async (req, res) => {
   try {
-    console.log("🔥 IG PUBLISH HIT 🔥");
-    console.log("AWS Credential : ", process.env.AWS_SECRET_ACCESS_KEY +" "+process.env.AWS_ACCESS_KEY_ID+" "+process.env.AWS_REGION+" "+process.env.S3_BUCKET_NAME); 
-    const { userId, caption, scheduleTime } = req.body;
-    const imageFile = req.file;
+    console.log("🔥 INSTAGRAM PUBLISH HIT 🔥");
 
-    if (!imageFile && !caption) {
-      return res.status(400).json({ msg: "Image or caption required" });
+    const { userId, caption, scheduleTime } = req.body;
+    const file = req.file; // multer-cloudinary file
+    console.log("Received file from multer:", file);
+
+    if (!file && !caption) {
+      console.log("❌ No media or caption provided");
+      return res.status(400).json({ msg: "Media or caption required" });
     }
 
+    // 🔹 Find connected IG account
     const acc = await SocialAccount.findOne({
       user: userId,
       platform: "instagram",
     });
 
     if (!acc) {
+      console.log("❌ Instagram not connected for user:", userId);
       return res.status(404).json({ msg: "Instagram not connected" });
+    }
+
+    // 🔹 Detect media type
+    const isVideo = file?.mimetype?.startsWith("video");
+    // Use fallback for video URL
+    const mediaUrl = file?.secure_url || file?.path;
+    console.log("Detected media type:", isVideo ? "video" : "image");
+    console.log("Media URL to be used:", mediaUrl);
+
+    if (!mediaUrl) {
+      console.log("❌ Media URL not available from Cloudinary");
+      return res.status(400).json({ msg: "Media URL not available from Cloudinary" });
     }
 
     // 🔹 Save post in DB first
@@ -422,60 +458,82 @@ export const publishInstagram = async (req, res) => {
       pageId: acc.providerId,
       pageName: acc.meta?.username,
       message: caption,
-      imageName: imageFile?.originalname,
+      mediaType: file?.resource_type,
+      mediaUrl,
       scheduledTime: scheduleTime || null,
       status: scheduleTime ? "scheduled" : "posted",
     });
+    console.log("Post saved in DB with ID:", post._id);
 
-    let uploadedUrl = null;
-    if (imageFile) {
-      uploadedUrl = await uploadToS3(imageFile);
-    }
-
-    // Function to post to Instagram
+    // 🔹 Function to publish to Instagram
     const postToInstagram = async () => {
-      const media = await axios.post(
-        `https://graph.facebook.com/v24.0/${acc.providerId}/media`,
-        {
-          image_url: uploadedUrl,
-          caption,
-          access_token: acc.accessToken,
-        }
-      );
+      try {
+        const mediaPayload = isVideo
+          ? {
+            media_type: "REELS", // videos must use REELS
+            video_url: mediaUrl,
+            caption,
+            access_token: acc.accessToken,
+          }
+          : {
+            media_type: "IMAGE",
+            image_url: mediaUrl,
+            caption,
+            access_token: acc.accessToken,
+          };
 
-      const publish = await axios.post(
-        `https://graph.facebook.com/v24.0/${acc.providerId}/media_publish`,
-        {
-          creation_id: media.data.id,
-          access_token: acc.accessToken,
-        }
-      );
+        console.log("Posting to IG with payload:", mediaPayload);
 
-      post.postId = publish.data.id;
-      post.status = "posted";
-      await post.save();
+        const mediaRes = await axios.post(
+          `https://graph.facebook.com/v19.0/${acc.providerId}/media`,
+          mediaPayload
+        );
+        console.log("Media created on IG:", mediaRes.data);
+
+        const publishRes = await axios.post(
+          `https://graph.facebook.com/v19.0/${acc.providerId}/media_publish`,
+          {
+            creation_id: mediaRes.data.id,
+            access_token: acc.accessToken,
+          }
+        );
+        console.log("Post published on IG:", publishRes.data);
+
+        post.postId = publishRes.data.id;
+        post.status = "posted";
+        await post.save();
+        console.log("✅ Instagram post saved in DB with IG postId:", publishRes.data.id);
+      } catch (err) {
+        console.error("❌ IG Post Error:", err.response?.data || err.message);
+        post.status = "failed";
+        await post.save();
+        throw err;
+      }
     };
 
-    // 🟢 IMMEDIATE POST
+    // 🟢 Immediate publish
     if (!scheduleTime) {
       await postToInstagram();
       return res.json({ success: true, type: "posted" });
     }
 
-    // 🟡 SCHEDULED POST
+    // 🟡 Scheduled publish
     schedule.scheduleJob(new Date(scheduleTime), async () => {
       try {
+        console.log("⏰ Scheduled job triggered for post:", post._id);
         await postToInstagram();
       } catch (err) {
-        console.error("Scheduled IG post failed:", err);
-        post.status = "failed";
-        await post.save();
+        console.error(
+          "❌ Scheduled IG post failed:",
+          err.response?.data || err.message
+        );
       }
     });
 
+    console.log("Post scheduled successfully:", post._id);
     return res.json({ success: true, type: "scheduled" });
   } catch (err) {
-    console.error("IG PUBLISH ERROR:", err.response?.data || err.message);
+    console.error("🔥 IG PUBLISH ERROR:", err.response?.data || err.message);
     return res.status(500).json({ success: false });
   }
 };
