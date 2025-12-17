@@ -14,7 +14,7 @@ import schedule from "node-schedule";
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL } = process.env;
 
 export const authRedirect = (req, res) => {
-  const { userId } = req.query;
+  const { userId, platform} = req.query;
   if (!userId) return res.status(400).send("Missing userId");
 
   const scopes = [
