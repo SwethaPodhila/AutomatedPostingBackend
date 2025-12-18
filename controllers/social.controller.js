@@ -84,7 +84,7 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: page.access_token || accessToken,
+          accessToken: page.access_token || accessToken, 
           scopes: page.tasks || [],
           connectedFrom: source || "web",
           meta: { ...page, picture: pictureUrl },
