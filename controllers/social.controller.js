@@ -103,7 +103,7 @@ export const callback = async (req, res) => {
       return res.json({
         success: true,
         message: "Facebook connected successfully",
-        redirectUrl: "com.wingspan.aimediahub://login-success?token="1234",
+        redirectUrl: "com.wingspan.aimediahub://login-success,
       });
     }
 
