@@ -1,5 +1,6 @@
 import express from "express";
 import * as twitterController from "../controllers/twitter.controller.js";
+import { getTwitterProfile } from "../controllers/twitter.controller.js";
 
 const router = express.Router();
 
@@ -8,6 +9,8 @@ const router = express.Router();
 // 🔹 Step 1: Twitter Login
 //   Final URL: /auth/twitter?userId=123
 router.get("/twitter", twitterController.twitterAuth);
+
+
 
 // 🔹 Step 2: Callback after Twitter Login
 //   Final URL: /auth/twitter/callback
@@ -28,5 +31,7 @@ router.get("/twitter/account/:userId", twitterController.getTwitterAccount);
 // 🔹 Step 6: Disconnect Twitter
 //   Final URL: /api/twitter/disconnect
 router.delete("/twitter/disconnect", twitterController.disconnectTwitter);
+
+router.get("/twitter/profile", getTwitterProfile);
 
 export default router;

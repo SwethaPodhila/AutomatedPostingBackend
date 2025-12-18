@@ -11,7 +11,7 @@ import { publishToPage } from "../utils/FbApis.js";
 import PostedPost from "../models/manualPosts.js";
 import schedule from "node-schedule";
 
-const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL ,ANDROID_REDIRECT_URI} = process.env;
+const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL, ANDROID_REDIRECT_URI } = process.env;
 
 export const authRedirect = (req, res) => {
   const { userId, source } = req.query;
@@ -26,7 +26,7 @@ export const authRedirect = (req, res) => {
   ];
 
   // ✅ ONLY ONE REDIRECT URI
-  const redirectUri = FB_REDIRECT_URI; 
+  const redirectUri = FB_REDIRECT_URI;
   // ex: https://automatedpostingbackend.onrender.com/social/facebook/callback
 
   const state = `${userId}:${source || "web"}`;
@@ -84,7 +84,7 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: page.access_token || accessToken, 
+          accessToken: page.access_token || accessToken,
           scopes: page.tasks || [],
           connectedFrom: source || "web",
           meta: { ...page, picture: pictureUrl },
@@ -407,43 +407,49 @@ export const instagramCallback = async (req, res) => {
   }
 };
 
+const waitForVideoProcessing = async (creationId, accessToken) => {
+  let status = "IN_PROGRESS";
+
+  while (status === "IN_PROGRESS") {
+    await new Promise((r) => setTimeout(r, 5000)); // wait 5 sec
+
+    const res = await axios.get(
+      `https://graph.facebook.com/v19.0/${creationId}`,
+      {
+        params: {
+          fields: "status_code",
+          access_token: accessToken,
+        },
+      }
+    );
+
+    status = res.data.status_code;
+    console.log("🎥 Video processing status:", status);
+
+    if (status === "ERROR") throw new Error("Video processing failed on Instagram");
+  }
+};
+
 export const publishInstagram = async (req, res) => {
   try {
     console.log("🔥 INSTAGRAM PUBLISH HIT 🔥");
 
     const { userId, caption, scheduleTime } = req.body;
-    const file = req.file; // multer-cloudinary file
-    console.log("Received file from multer:", file);
+    const file = req.file;
 
-    if (!file && !caption) {
-      console.log("❌ No media or caption provided");
+    if (!file && !caption)
       return res.status(400).json({ msg: "Media or caption required" });
-    }
 
-    // 🔹 Find connected IG account
-    const acc = await SocialAccount.findOne({
-      user: userId,
-      platform: "instagram",
-    });
+    // Get connected Instagram account
+    const acc = await SocialAccount.findOne({ user: userId, platform: "instagram" });
+    if (!acc) return res.status(404).json({ msg: "Instagram not connected" });
 
-    if (!acc) {
-      console.log("❌ Instagram not connected for user:", userId);
-      return res.status(404).json({ msg: "Instagram not connected" });
-    }
-
-    // 🔹 Detect media type
     const isVideo = file?.mimetype?.startsWith("video");
-    // Use fallback for video URL
     const mediaUrl = file?.secure_url || file?.path;
-    console.log("Detected media type:", isVideo ? "video" : "image");
-    console.log("Media URL to be used:", mediaUrl);
 
-    if (!mediaUrl) {
-      console.log("❌ Media URL not available from Cloudinary");
-      return res.status(400).json({ msg: "Media URL not available from Cloudinary" });
-    }
+    if (!mediaUrl) return res.status(400).json({ msg: "Media URL not available" });
 
-    // 🔹 Save post in DB first
+    // Save post in DB first
     const post = await PostedPost.create({
       user: userId,
       platform: "instagram",
@@ -455,42 +461,35 @@ export const publishInstagram = async (req, res) => {
       scheduledTime: scheduleTime || null,
       status: scheduleTime ? "scheduled" : "posted",
     });
+
     console.log("Post saved in DB with ID:", post._id);
 
-    // 🔹 Function to publish to Instagram
+    // Publish function
     const postToInstagram = async () => {
       try {
         const mediaPayload = isVideo
-          ? {
-            media_type: "REELS", // videos must use REELS
-            video_url: mediaUrl,
-            caption,
-            access_token: acc.accessToken,
-          }
-          : {
-            media_type: "IMAGE",
-            image_url: mediaUrl,
-            caption,
-            access_token: acc.accessToken,
-          };
+          ? { media_type: "REELS", video_url: mediaUrl, caption, access_token: acc.accessToken }
+          : { image_url: mediaUrl, caption, access_token: acc.accessToken };
 
-        console.log("Posting to IG with payload:", mediaPayload);
-
+        // 1️⃣ Create media
         const mediaRes = await axios.post(
           `https://graph.facebook.com/v19.0/${acc.providerId}/media`,
           mediaPayload
         );
         console.log("Media created on IG:", mediaRes.data);
 
+        // 2️⃣ Wait if video
+        if (isVideo) await waitForVideoProcessing(mediaRes.data.id, acc.accessToken);
+
+        // 3️⃣ Publish media
         const publishRes = await axios.post(
           `https://graph.facebook.com/v19.0/${acc.providerId}/media_publish`,
-          {
-            creation_id: mediaRes.data.id,
-            access_token: acc.accessToken,
-          }
+          { creation_id: mediaRes.data.id, access_token: acc.accessToken }
         );
+
         console.log("Post published on IG:", publishRes.data);
 
+        // 4️⃣ Update DB
         post.postId = publishRes.data.id;
         post.status = "posted";
         await post.save();
@@ -503,22 +502,19 @@ export const publishInstagram = async (req, res) => {
       }
     };
 
-    // 🟢 Immediate publish
+    // Immediate publish
     if (!scheduleTime) {
       await postToInstagram();
       return res.json({ success: true, type: "posted" });
     }
 
-    // 🟡 Scheduled publish
+    // Scheduled publish
     schedule.scheduleJob(new Date(scheduleTime), async () => {
       try {
         console.log("⏰ Scheduled job triggered for post:", post._id);
         await postToInstagram();
       } catch (err) {
-        console.error(
-          "❌ Scheduled IG post failed:",
-          err.response?.data || err.message
-        );
+        console.error("❌ Scheduled IG post failed:", err.response?.data || err.message);
       }
     });
 

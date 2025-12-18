@@ -118,6 +118,7 @@ app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
 app.post("/api/twitter/disconnect", disconnectTwitter);
 app.get("/api/twitter/verify-session", verifyAndroidSession);
+app.get("/api/twitter/profile", getTwitterProfile);
 
 // =========================
 //  📌 LINKEDIN ROUTES

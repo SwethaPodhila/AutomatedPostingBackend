@@ -23,14 +23,14 @@ const twitterClient = new TwitterApi({
 const refreshAccessToken = async (refreshToken) => {
   try {
     console.log("🔄 Attempting to refresh access token...");
-    
-    const { 
-      accessToken: newAccessToken, 
-      refreshToken: newRefreshToken 
+
+    const {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
     } = await twitterClient.refreshOAuth2Token(refreshToken);
-    
+
     console.log("✅ Token refreshed successfully");
-    
+
     return {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken
@@ -52,7 +52,7 @@ const getValidTwitterClient = async (account) => {
 
     // First, try with current token
     const client = new TwitterApi(accessToken);
-    
+
     try {
       // Quick test to see if token is valid
       await client.v2.me();
@@ -60,21 +60,21 @@ const getValidTwitterClient = async (account) => {
       return { client, accessToken, refreshToken };
     } catch (tokenError) {
       console.log("⚠️ Token appears invalid, attempting refresh...");
-      
+
       // Try to refresh the token
       try {
         const newTokens = await refreshAccessToken(refreshToken);
         accessToken = newTokens.accessToken;
         refreshToken = newTokens.refreshToken;
         tokenUpdated = true;
-        
+
         // Update in database
         await TwitterAccount.findByIdAndUpdate(account._id, {
           accessToken: newTokens.accessToken,
           refreshToken: newTokens.refreshToken,
           updatedAt: new Date()
         });
-        
+
         console.log("✅ Token refreshed and saved to database");
         return { client: new TwitterApi(accessToken), accessToken, refreshToken };
       } catch (refreshError) {
@@ -104,8 +104,8 @@ export const twitterAuth = async (req, res) => {
 
     const { url, codeVerifier, state } = twitterClient.generateOAuth2AuthLink(
       TWITTER_CALLBACK_URL,
-      { 
-        scope: ["tweet.read", "tweet.write", "users.read", "offline.access"] 
+      {
+        scope: ["tweet.read", "tweet.write", "users.read", "offline.access"]
       }
     );
 
@@ -126,14 +126,14 @@ export const twitterAuth = async (req, res) => {
 
     console.log(`✅ OAuth saved: ${loginPlatform} flow`);
     console.log(`📝 State: ${state.substring(0, 10)}...`);
-    
+
     res.redirect(url);
 
   } catch (err) {
     console.error("❌ Auth Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -143,17 +143,17 @@ export const twitterAuth = async (req, res) => {
 // =========================
 export const twitterCallback = async (req, res) => {
   console.log("🚨 Twitter Callback Triggered");
-  
+
   try {
     const { code, state } = req.query;
     if (!code || !state) return res.status(400).send("Missing code or state");
 
     // Find account
-    const account = await TwitterAccount.findOne({ 
-      oauthState: state, 
-      platform: "twitter" 
+    const account = await TwitterAccount.findOne({
+      oauthState: state,
+      platform: "twitter"
     });
-    
+
     if (!account) {
       console.error("❌ Session expired - No account found");
       return sendErrorResponse(res, "Session expired", "web");
@@ -224,19 +224,19 @@ export const twitterCallback = async (req, res) => {
 export const postToTwitter = async (req, res) => {
   try {
     console.log("📝 Tweet request received:", req.body);
-    
+
     const { userId, content } = req.body;
     if (!userId || !content) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId and content required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId and content required"
       });
     }
 
     if (!content.trim()) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Tweet content cannot be empty" 
+      return res.status(400).json({
+        success: false,
+        error: "Tweet content cannot be empty"
       });
     }
 
@@ -247,16 +247,16 @@ export const postToTwitter = async (req, res) => {
     });
 
     if (!account) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Twitter not connected. Please connect your Twitter account first." 
+      return res.status(401).json({
+        success: false,
+        error: "Twitter not connected. Please connect your Twitter account first."
       });
     }
 
     if (!account.accessToken) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Access token missing. Please reconnect." 
+      return res.status(401).json({
+        success: false,
+        error: "Access token missing. Please reconnect."
       });
     }
 
@@ -264,12 +264,12 @@ export const postToTwitter = async (req, res) => {
 
     // Get valid client (with token refresh if needed)
     const { client } = await getValidTwitterClient(account);
-    
+
     // Post tweet
     const tweet = await client.v2.tweet(content);
     const tweetId = tweet.data.id;
     const tweetUrl = `https://twitter.com/${account.meta?.username}/status/${tweetId}`;
-    
+
     console.log(`✅ Tweet posted! ID: ${tweetId}, URL: ${tweetUrl}`);
 
     // Save to posts database
@@ -304,7 +304,7 @@ export const postToTwitter = async (req, res) => {
 
   } catch (err) {
     console.error("❌ Post Error:", err.message);
-    
+
     // Check if it's an authentication error
     if (err.code === 401 || err.message.includes("Unauthorized") || err.message.includes("authenticate")) {
       return res.status(401).json({
@@ -313,7 +313,7 @@ export const postToTwitter = async (req, res) => {
         code: "AUTH_EXPIRED"
       });
     }
-    
+
     // Check if it's a rate limit error
     if (err.code === 429) {
       return res.status(429).json({
@@ -322,7 +322,7 @@ export const postToTwitter = async (req, res) => {
         code: "RATE_LIMIT"
       });
     }
-    
+
     // Generic error
     res.status(500).json({
       success: false,
@@ -338,27 +338,27 @@ export const postToTwitter = async (req, res) => {
 export const checkTwitterConnection = async (req, res) => {
   try {
     const { userId } = req.query;
-    if (!userId) return res.status(400).json({ 
-      success: false, 
-      error: "userId required" 
+    if (!userId) return res.status(400).json({
+      success: false,
+      error: "userId required"
     });
 
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter",
     });
-    
+
     if (!account) {
-      return res.json({ 
-        success: true, 
-        connected: false 
+      return res.json({
+        success: true,
+        connected: false
       });
     }
 
     // Test if token is still valid
     let isValid = false;
     let error = null;
-    
+
     try {
       const { client } = await getValidTwitterClient(account);
       await client.v2.me();
@@ -383,9 +383,9 @@ export const checkTwitterConnection = async (req, res) => {
 
   } catch (err) {
     console.error("Check Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -396,23 +396,23 @@ export const checkTwitterConnection = async (req, res) => {
 export const verifyAndroidSession = async (req, res) => {
   try {
     const { session_id } = req.query;
-    if (!session_id) return res.status(400).json({ 
-      success: false, 
-      error: "session_id required" 
+    if (!session_id) return res.status(400).json({
+      success: false,
+      error: "session_id required"
     });
 
     console.log(`🔍 Verifying Session: ${session_id}`);
 
     // Find account with this session ID
-    const account = await TwitterAccount.findOne({ 
-      androidSessionId: session_id, 
-      platform: "twitter" 
+    const account = await TwitterAccount.findOne({
+      androidSessionId: session_id,
+      platform: "twitter"
     });
-    
+
     if (!account) {
       console.error(`❌ Session not found: ${session_id}`);
-      return res.status(404).json({ 
-        success: false, 
+      return res.status(404).json({
+        success: false,
         error: "Session expired or invalid",
         code: "SESSION_EXPIRED"
       });
@@ -421,8 +421,8 @@ export const verifyAndroidSession = async (req, res) => {
     console.log(`✅ Session Verified: ${account.user} (@${account.meta?.username})`);
 
     // Clear session ID after verification
-    await TwitterAccount.findByIdAndUpdate(account._id, { 
-      androidSessionId: null 
+    await TwitterAccount.findByIdAndUpdate(account._id, {
+      androidSessionId: null
     });
 
     res.json({
@@ -439,9 +439,9 @@ export const verifyAndroidSession = async (req, res) => {
 
   } catch (err) {
     console.error("❌ Verify Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -453,9 +453,9 @@ export const disconnectTwitter = async (req, res) => {
   try {
     const { userId } = req.body;
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId required"
       });
     }
 
@@ -482,11 +482,11 @@ export const disconnectTwitter = async (req, res) => {
 export const getTwitterPosts = async (req, res) => {
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId required"
       });
     }
 
@@ -494,8 +494,8 @@ export const getTwitterPosts = async (req, res) => {
       user: userId,
       platform: "twitter"
     })
-    .sort({ postedAt: -1 })
-    .limit(20);
+      .sort({ postedAt: -1 })
+      .limit(20);
 
     res.json({
       success: true,
@@ -505,9 +505,54 @@ export const getTwitterPosts = async (req, res) => {
 
   } catch (err) {
     console.error("Get Posts Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
+export const getTwitterProfile = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId required"
+      });
+    }
+
+    const account = await TwitterAccount.findOne({
+      user: userId,
+      platform: "twitter"
+    });
+
+    if (!account || !account.meta) {
+      return res.json({
+        success: false,
+        connected: false,
+        message: "Twitter not connected"
+      });
+    }
+
+    res.json({
+      success: true,
+      connected: true,
+      profile: {
+        userId: account.user,
+        twitterId: account.meta.twitterId,
+        username: account.meta.username,
+        name: account.meta.name,
+        connectedAt: account.createdAt
+      }
+    });
+
+  } catch (err) {
+    console.error("Profile Error:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message
     });
   }
 };
@@ -517,10 +562,10 @@ export const getTwitterPosts = async (req, res) => {
 // =========================
 const handleRedirect = (res, platform, userData, userId, sessionId, accessToken) => {
   console.log(`🔄 Redirecting: ${platform.toUpperCase()} flow`);
-  
+
   // 🎯 ANDROID: Send Direct Deep Link Redirect
   if (platform === "android" && sessionId) {
-    const deepLink = 
+    const deepLink =
       `com.wingspan.aimediahub://twitter-callback` +
       `?session_id=${sessionId}` +
       `&status=success` +
@@ -528,33 +573,33 @@ const handleRedirect = (res, platform, userData, userId, sessionId, accessToken)
       `&twitter_id=${userData.id}` +
       `&user_id=${userId}` +
       `&access_token=${encodeURIComponent(accessToken)}`;
-    
+
     console.log(`🔗 Android Deep Link Created: ${deepLink}`);
-    
+
     // Direct redirect to deep link
     return res.redirect(deepLink);
   }
-  
+
   // 🎯 WEB: Normal Redirect
-  const webRedirect = 
+  const webRedirect =
     `https://automatedpostingsfrontend.onrender.com/twitter-manager` +
     `?twitter=connected` +
     `&username=${encodeURIComponent(userData.username)}` +
     `&user_id=${userId}`;
-  
+
   console.log(`🌐 Web Redirect: ${webRedirect}`);
   return res.redirect(webRedirect);
 };
 
 const sendErrorResponse = (res, error, platform) => {
   console.log(`❌ ${platform.toUpperCase()} Error: ${error}`);
-  
+
   if (platform === "android") {
     const errorLink = `com.wingspan.aimediahub://twitter-callback?status=error&error=${encodeURIComponent(error)}`;
     // Direct redirect to error deep link
     return res.redirect(errorLink);
   }
-  
+
   // Web error
   const webError = `https://automatedpostingsfrontend.onrender.com/twitter-connect?error=${encodeURIComponent(error)}`;
   return res.redirect(webError);
