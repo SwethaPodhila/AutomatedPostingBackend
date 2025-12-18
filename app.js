@@ -12,6 +12,8 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import automationRoutes from "./routes/automation.routes.js";
 
+import "./cron/automation.cron.js";
+
 import {
   twitterAuth,
   twitterCallback,

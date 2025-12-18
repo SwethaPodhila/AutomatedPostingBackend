@@ -1,45 +1,13 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
-const AutomationPostSchema = new mongoose.Schema(
-  {
-    user: {
-      type: String,
-      required: true
-    },
+const AutomationSchema = new mongoose.Schema({
+  userId: String,
+  prompt: String,
+  frequency: String, // weekly / monthly
+  interval: { type: Number, default: 1 },
+  nextRunAt: Date,
+  pageIds: [String],
+  status: { type: String, default: "active" }
+});
 
-    content: {
-      type: String,
-      required: true
-    },
-
-    frequency: {
-      type: String,
-      enum: ["weekly", "monthly"],
-      required: true
-    },
-
-    startDate: {
-      type: Date,
-      required: true
-    },
-
-    socialAccounts: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "SocialAccount"
-      }
-    ],
-
-    status: {
-      type: String,
-      enum: ["active", "paused"],
-      default: "active"
-    },
-
-    lastTriggeredAt: Date,
-    nextTriggerAt: Date
-  },
-  { timestamps: true }
-);
-
-module.exports = mongoose.model("AutomationPost", AutomationPostSchema);
+export default mongoose.model("Automation", AutomationSchema);
