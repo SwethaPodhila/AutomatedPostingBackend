@@ -18,7 +18,8 @@ import {
   checkTwitterConnection,
   postToTwitter,
   disconnectTwitter,
-  verifyAndroidSession // ✅ ADDED
+  verifyAndroidSession,
+  getTwitterProfile // ✅ ADDED
 } from "./controllers/twitter.controller.js";
 
 
