@@ -14,7 +14,7 @@ import schedule from "node-schedule";
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL ,ANDROID_REDIRECT_URI} = process.env;
 
 export const authRedirect = (req, res) => {
-  const { userId, platform} = req.query;
+  const { userId, source } = req.query;
   if (!userId) return res.status(400).send("Missing userId");
 
   const scopes = [
@@ -22,19 +22,20 @@ export const authRedirect = (req, res) => {
     "pages_manage_posts",
     "pages_show_list",
     "public_profile",
-    "email"
+    "email",
   ];
 
-  const redirectUri =
-    platform === "android"
-      ? ANDROID_REDIRECT_URI   // ex: com.myapp://facebook/callback
-      : FB_REDIRECT_URI;      // web redirect
+  // ✅ ONLY ONE REDIRECT URI
+  const redirectUri = FB_REDIRECT_URI; 
+  // ex: https://automatedpostingbackend.onrender.com/social/facebook/callback
+
+  const state = `${userId}:${source || "web"}`;
 
   const url =
     `https://www.facebook.com/v20.0/dialog/oauth` +
     `?client_id=${FB_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&state=${encodeURIComponent(userId)}` +
+    `&state=${encodeURIComponent(state)}` +
     `&scope=${scopes.join(",")}`;
 
   return res.redirect(url);
@@ -45,22 +46,20 @@ export const callback = async (req, res) => {
     console.log("===== FACEBOOK CALLBACK HIT =====");
     console.log("FULL QUERY:", req.query);
 
-    const { code, state,platform } = req.query;
+    const { code, state } = req.query;
 
     if (!code) return res.status(400).send("Missing code");
-    if (!state) return res.status(400).send("Missing userId");
+    if (!state) return res.status(400).send("Missing state");
 
-    const userId = state; // ✅ DO NOT decode
+    const [userId, source] = state.split(":");
 
-    const redirectUri =
-      platform === "android"
-        ? ANDROID_REDIRECT_URI
-        : FB_REDIRECT_URI;
+    // ✅ SAME redirect_uri as authRedirect
+    const redirectUri = FB_REDIRECT_URI;
 
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
-      redirectUri,   // ✅ IMPORTANT
+      redirectUri,
       code,
     });
 
@@ -75,13 +74,11 @@ export const callback = async (req, res) => {
         page.access_token || accessToken
       );
 
-      const connectedFrom = platform === "android" ? "android" : "web";
-
       await SocialAccount.findOneAndUpdate(
         {
           user: userId,
           platform: "facebook",
-          providerId: page.id
+          providerId: page.id,
         },
         {
           user: userId,
@@ -89,26 +86,19 @@ export const callback = async (req, res) => {
           providerId: page.id,
           accessToken: page.access_token || accessToken,
           scopes: page.tasks || [],
-          connectedFrom,
-          meta: {
-            ...page,
-            picture: pictureUrl
-          }
+          connectedFrom: source || "web",
+          meta: { ...page, picture: pictureUrl },
         },
         { upsert: true, new: true }
       );
     }
 
-    if (platform === "android") {
-      return res.json({
-        success: true,
-        message: "Facebook connected successfully",
-        redirectUrl: "com.wingspan.aimediahub://login-success",
-      });
+    // ✅ FINAL REDIRECT
+    if (source === "android") {
+      return res.redirect("com.wingspan.aimediahub://login-success");
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
-
   } catch (err) {
     console.error("Callback Error ==>", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
