@@ -12,7 +12,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import automationRoutes from "./routes/automation.routes.js";
 
-import "./cron/automation.cron.js";
+//import "./cron/automation.cron.js";
 
 import {
   twitterAuth,
@@ -66,7 +66,7 @@ app.use(cookieParser());
 
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
-app.use("/automation", automationRoutes);
+//app.use("/automation", automationRoutes);
 
 
 // publish & metrics
