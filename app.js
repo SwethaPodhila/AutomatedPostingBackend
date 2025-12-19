@@ -10,7 +10,7 @@ import * as facebookController from "./controllers/social.controller.js";
 import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";
-import automationRoutes from "./routes/automation.routes.js";
+//import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
 
