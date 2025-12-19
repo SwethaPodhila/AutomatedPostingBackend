@@ -525,10 +525,13 @@ export const disconnectTwitter = async (req, res) => {
 // =========================
 // ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY) - FIXED
 // =========================
+// =========================
+// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY) - UPDATED WITH PROFILE PICTURE & TOKEN
+// =========================
 export const getTwitterProfile = async (req, res) => {
   try {
     const { userId } = req.query;
-   
+ 
     console.log("🔍 Profile request received, userId:", userId);
  
     if (!userId) {
@@ -539,7 +542,7 @@ export const getTwitterProfile = async (req, res) => {
       });
     }
  
-    // Find account in database
+    // 1. Find account in database
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
@@ -547,7 +550,7 @@ export const getTwitterProfile = async (req, res) => {
  
     if (!account) {
       console.log("❌ Account not found for userId:", userId);
-      return res.status(200).json({  // Changed to 200 OK, not 404
+      return res.status(200).json({
         success: true,
         connected: false,
         message: "Twitter account not connected",
@@ -555,29 +558,82 @@ export const getTwitterProfile = async (req, res) => {
       });
     }
  
-    if (!account.meta) {
-      return res.json({
+    if (!account.accessToken) {
+      return res.status(200).json({
         success: true,
         connected: false,
-        message: "Twitter profile data missing",
+        message: "Access token missing for this account",
         profile: null
       });
     }
  
+    // 2. Fetch fresh user details from Twitter API
+    let profileImageUrl = null;
+    let freshUserData = null;
+    let tokenStatus = "unknown";
+ 
+    try {
+      // Initialize Twitter client with the user's access token
+      const userClient = new TwitterApi(account.accessToken);
+      // Request specific user fields including profile_image_url[citation:4]
+      const user = await userClient.v2.me({
+        "user.fields": ["profile_image_url", "username", "name", "id"]
+      });
+      freshUserData = user.data;
+      profileImageUrl = user.data.profile_image_url || null;
+      tokenStatus = "valid";
+      console.log("✅ Fresh Twitter data fetched for:", user.data.username);
+ 
+    } catch (apiError) {
+      console.error("❌ Error fetching from Twitter API:", apiError.message);
+      // Use stored data if API call fails
+      if (account.meta) {
+        freshUserData = account.meta;
+        profileImageUrl = account.meta.profileImageUrl || null;
+      }
+      tokenStatus = "invalid_or_expired";
+    }
+ 
+    // 3. Prepare profile image URLs in different sizes[citation:4]
+    let profileImageUrls = {};
+    if (profileImageUrl) {
+      // Remove the '_normal' suffix to get the original image
+      const baseUrl = profileImageUrl.replace('_normal', '');
+      profileImageUrls = {
+        normal: profileImageUrl,           // 48x48
+        bigger: `${baseUrl}_bigger`,       // 73x73
+        mini: `${baseUrl}_mini`,           // 24x24
+        original: baseUrl                  // Original size
+      };
+    }
+ 
     // ✅ SUCCESS RESPONSE
-    console.log("✅ Profile found:", account.meta.username);
-   
     return res.json({
       success: true,
       connected: true,
       message: "Twitter account is connected",
+      tokenDetails: {
+        status: tokenStatus,
+        // Include first few characters of token for debugging (not full for security)
+        hasAccessToken: !!account.accessToken,
+        accessTokenPreview: account.accessToken ? 
+          `${account.accessToken.substring(0, 15)}...` : null,
+        hasRefreshToken: !!account.refreshToken,
+        tokenExpiresAt: account.tokenExpiresAt,
+        scopes: account.scopes || []
+      },
       profile: {
         userId: account.user,
-        twitterId: account.meta.twitterId || account.providerId,
-        username: account.meta.username,
-        name: account.meta.name,
+        twitterId: freshUserData?.id || account.meta?.twitterId || account.providerId,
+        username: freshUserData?.username || account.meta?.username,
+        name: freshUserData?.name || account.meta?.name,
+        // 🖼️ PROFILE PICTURE DATA
+        profileImageUrl: profileImageUrl,
+        profileImageUrls: profileImageUrls,
         connectedAt: account.createdAt,
-        updatedAt: account.updatedAt
+        updatedAt: account.updatedAt,
+        // Store the fresh API data for reference
+        apiData: freshUserData
       }
     });
  
@@ -590,6 +646,7 @@ export const getTwitterProfile = async (req, res) => {
     });
   }
 };
+
 // =========================
 // 8️⃣ GET TWITTER ACCOUNT (for /api/twitter/account/:userId route)
 // =========================
