@@ -10,6 +10,7 @@ import * as facebookController from "./controllers/social.controller.js";
 import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";
+ import twitterRoutes from "./routes/twitter.routes.js";                                                                                                                       
 //import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
@@ -64,6 +65,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+app.use("/api/twitter", twitterRoutes);    
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 //app.use("/automation", automationRoutes);
