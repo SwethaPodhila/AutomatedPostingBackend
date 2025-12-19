@@ -446,35 +446,7 @@ export const verifyAndroidSession = async (req, res) => {
   }
 };
 
-// =========================
-// 6️⃣ DISCONNECT
-// =========================
-export const disconnectTwitter = async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId required"
-      });
-    }
 
-    const result = await TwitterAccount.deleteOne({
-      user: userId,
-      platform: "twitter"
-    });
-
-    res.json({
-      success: true,
-      message: "Twitter disconnected",
-      deletedCount: result.deletedCount
-    });
-
-  } catch (err) {
-    console.error("Disconnect Error:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
 
 // =========================
 // 7️⃣ GET POSTS
@@ -512,62 +484,165 @@ export const getTwitterPosts = async (req, res) => {
   }
 };
 
-// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY)
+/ =========================
+// 6️⃣ DISCONNECT (FIXED)
 // =========================
+export const disconnectTwitter = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    console.log("🔴 Disconnect request received, userId:", userId);
+   
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId required in request body"
+      });
+    }
+ 
+    // Find and delete the account
+    const result = await TwitterAccount.deleteOne({
+      user: userId,
+      platform: "twitter"
+    });
+ 
+    console.log("✅ Delete result:", result);
+ 
+    res.json({
+      success: true,
+      message: "Twitter account disconnected successfully",
+      deletedCount: result.deletedCount
+    });
+ 
+  } catch (err) {
+    console.error("❌ Disconnect Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message || "Failed to disconnect Twitter account"
+    });
+  }
+};
+ 
 // =========================
-// ✅ GET TWITTER PROFILE (Postman-friendly)
+// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY) - FIXED
 // =========================
 export const getTwitterProfile = async (req, res) => {
   try {
     const { userId } = req.query;
+   
+    console.log("🔍 Profile request received, userId:", userId);
  
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "userId query parameter is required"
+        message: "userId query parameter required (e.g., ?userId=123)",
+        connected: false
       });
     }
  
-    // 🔥 Only DB check
+    // Find account in database
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
-    }).lean(); // lean() gives plain JS object
+    });
  
     if (!account) {
-      return res.status(404).json({
-        success: false,
+      console.log("❌ Account not found for userId:", userId);
+      return res.status(200).json({  // Changed to 200 OK, not 404
+        success: true,
         connected: false,
-        message: "Twitter account not found for this userId"
+        message: "Twitter account not connected",
+        profile: null
       });
     }
  
-    if (!account.meta || !account.meta.username) {
-      return res.status(404).json({
-        success: false,
+    if (!account.meta) {
+      return res.json({
+        success: true,
         connected: false,
-        message: "Twitter profile data is missing or incomplete"
+        message: "Twitter profile data missing",
+        profile: null
       });
     }
  
-    // ✅ Success
+    // ✅ SUCCESS RESPONSE
+    console.log("✅ Profile found:", account.meta.username);
+   
     return res.json({
       success: true,
       connected: true,
+      message: "Twitter account is connected",
       profile: {
         userId: account.user,
-        twitterId: account.meta.twitterId || null,
+        twitterId: account.meta.twitterId || account.providerId,
         username: account.meta.username,
-        name: account.meta.name || null,
-        connectedAt: account.createdAt
+        name: account.meta.name,
+        connectedAt: account.createdAt,
+        updatedAt: account.updatedAt
       }
     });
  
   } catch (err) {
-    console.error("❌ getTwitterProfile Error:", err);
+    console.error("❌ Profile Error:", err);
     return res.status(500).json({
       success: false,
-      message: "Internal server error: " + err.message
+      message: err.message,
+      connected: false
+    });
+  }
+};
+// =========================
+// 8️⃣ GET TWITTER ACCOUNT (for /api/twitter/account/:userId route)
+// =========================
+export const getTwitterAccount = async (req, res) => {
+  try {
+    const { userId } = req.params;
+   
+    console.log("🔍 Get Account request for userId:", userId);
+ 
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter required in URL (e.g., /account/123)"
+      });
+    }
+ 
+    const account = await TwitterAccount.findOne({
+      user: userId,
+      platform: "twitter"
+    });
+ 
+    if (!account) {
+      console.log("❌ Account not found for userId:", userId);
+      return res.status(200).json({
+        success: true,
+        connected: false,
+        error: "Twitter account not connected",
+        account: null
+      });
+    }
+ 
+    console.log("✅ Account found:", account.meta?.username);
+   
+    res.json({
+      success: true,
+      connected: true,
+      account: {
+        userId: account.user,
+        twitterId: account.providerId || account.meta?.twitterId,
+        username: account.meta?.username,
+        name: account.meta?.name,
+        connectedAt: account.createdAt,
+        updatedAt: account.updatedAt,
+        hasAccessToken: !!account.accessToken,
+        hasRefreshToken: !!account.refreshToken
+      }
+    });
+ 
+  } catch (err) {
+    console.error("❌ Get Account Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
