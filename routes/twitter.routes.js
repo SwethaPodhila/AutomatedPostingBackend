@@ -1,38 +1,35 @@
 import express from "express";
-import * as twitterController from "../controllers/twitter.controller.js";
- 
+import {
+  twitterAuth,
+  twitterCallback,
+  checkTwitterConnection,
+  postToTwitter,
+  disconnectTwitter,
+  verifyAndroidSession,
+  getTwitterProfile,
+  getTwitterAccount
+} from "../controllers/twitter.controller.js";
  
 const router = express.Router();
  
-// ==================== TWITTER ROUTES (UPDATED TO MATCH server.js) ====================
+// ==================== TWITTER ROUTES ====================
  
-// 🔹 Step 1: Twitter Login
-//   Final URL: /auth/twitter?userId=123
-router.get("/twitter", twitterController.twitterAuth);
+// 🔹 Check Connection
+router.get("/check", checkTwitterConnection);
  
-// 🔹 Step 2: Callback after Twitter Login
-//   Final URL: /auth/twitter/callback
-router.get("/twitter/callback", twitterController.twitterCallback);
+// 🔹 Post Tweet
+router.post("/post", postToTwitter);
  
-// 🔹 Step 3: Check if Twitter is Connected
-//   Final URL: /api/twitter/check?userId=123
-router.get("/twitter/check", twitterController.checkTwitterConnection);
+// 🔹 Get Profile (QUERY PARAM)
+router.get("/profile", getTwitterProfile);
  
-// 🔹 Step 4: Post Tweet
-//   Final URL: /api/twitter/post
-router.post("/twitter/post", twitterController.postToTwitter);
+// 🔹 Get Account (URL PARAM)
+router.get("/account/:userId", getTwitterAccount);
  
-// 🔹 Step 5: Get Saved Account Details
-//   Final URL: /api/twitter/account/:userId
-router.get("/twitter/account/:userId", twitterController.getTwitterAccount);
+// 🔹 Disconnect Twitter (POST method)
+router.post("/disconnect", disconnectTwitter);
  
-// 🔹 Step 6: Disconnect Twitter
-//   Final URL: /api/twitter/disconnect
-router.delete("/twitter/disconnect", twitterController.disconnectTwitter);
- 
- 
-// Get profile info
-// 🔹 Step 7: Get Profile info
-router.get("/twitter/profile", twitterController.getTwitterProfile);
+// 🔹 Verify Android Session
+router.get("/verify-session", verifyAndroidSession);
  
 export default router;
