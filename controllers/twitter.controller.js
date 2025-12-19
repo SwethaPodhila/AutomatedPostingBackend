@@ -512,31 +512,43 @@ export const getTwitterPosts = async (req, res) => {
   }
 };
 
+// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY)
+// =========================
 export const getTwitterProfile = async (req, res) => {
   try {
     const { userId } = req.query;
-
+ 
     if (!userId) {
       return res.status(400).json({
         success: false,
         message: "userId required"
       });
     }
-
+ 
+    // 🔥 ONLY DB CHECK (NO SESSION, NO COOKIE)
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
     });
-
-    if (!account || !account.meta) {
-      return res.json({
+ 
+    if (!account) {
+      return res.status(404).json({
         success: false,
         connected: false,
-        message: "Twitter not connected"
+        message: "Twitter account not found"
       });
     }
-
-    res.json({
+ 
+    if (!account.meta) {
+      return res.status(404).json({
+        success: false,
+        connected: false,
+        message: "Twitter profile data missing"
+      });
+    }
+ 
+    // ✅ SUCCESS RESPONSE
+    return res.json({
       success: true,
       connected: true,
       profile: {
@@ -547,10 +559,10 @@ export const getTwitterProfile = async (req, res) => {
         connectedAt: account.createdAt
       }
     });
-
+ 
   } catch (err) {
     console.error("Profile Error:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message
     });
