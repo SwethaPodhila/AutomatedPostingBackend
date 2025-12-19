@@ -31,5 +31,5 @@ router.get("/twitter/account/:userId", twitterController.getTwitterAccount);
 // 🔹 Step 6: Disconnect Twitter
 //   Final URL: /api/twitter/disconnect
 router.delete("/twitter/disconnect", twitterController.disconnectTwitter);
-
+router.get("/profile", twitterController.getTwitterProfile);
 export default router;
