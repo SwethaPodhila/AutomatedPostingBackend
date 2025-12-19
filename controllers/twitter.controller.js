@@ -514,6 +514,9 @@ export const getTwitterPosts = async (req, res) => {
 
 // ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY)
 // =========================
+// =========================
+// ✅ GET TWITTER PROFILE (Postman-friendly)
+// =========================
 export const getTwitterProfile = async (req, res) => {
   try {
     const { userId } = req.query;
@@ -521,50 +524,50 @@ export const getTwitterProfile = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        message: "userId required"
+        message: "userId query parameter is required"
       });
     }
  
-    // 🔥 ONLY DB CHECK (NO SESSION, NO COOKIE)
+    // 🔥 Only DB check
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
-    });
+    }).lean(); // lean() gives plain JS object
  
     if (!account) {
       return res.status(404).json({
         success: false,
         connected: false,
-        message: "Twitter account not found"
+        message: "Twitter account not found for this userId"
       });
     }
  
-    if (!account.meta) {
+    if (!account.meta || !account.meta.username) {
       return res.status(404).json({
         success: false,
         connected: false,
-        message: "Twitter profile data missing"
+        message: "Twitter profile data is missing or incomplete"
       });
     }
  
-    // ✅ SUCCESS RESPONSE
+    // ✅ Success
     return res.json({
       success: true,
       connected: true,
       profile: {
         userId: account.user,
-        twitterId: account.meta.twitterId,
+        twitterId: account.meta.twitterId || null,
         username: account.meta.username,
-        name: account.meta.name,
+        name: account.meta.name || null,
         connectedAt: account.createdAt
       }
     });
  
   } catch (err) {
-    console.error("Profile Error:", err);
+    console.error("❌ getTwitterProfile Error:", err);
     return res.status(500).json({
       success: false,
-      message: err.message
+      message: "Internal server error: " + err.message
     });
   }
 };
