@@ -68,16 +68,8 @@ export const linkedinAuth = async (req, res) => {
 
       // Handle different platforms
       if (platform === 'android') {
-        // For Android, return JSON with auth URL and deep link
-        console.log("📱 Android platform detected");
-        res.json({
-          success: true,
-          authUrl: authUrl,
-          deepLink: ANDROID_DEEP_LINK,
-          state: state,
-          userId: userId,
-          message: "Open this URL in browser, then return to app"
-        });
+        console.log("📱 Android platform detected - redirecting to LinkedIn");
+        return res.redirect(authUrl); // <- DIRECT REDIRECT TO LINKEDIN
       } else {
         // For web, redirect directly
         console.log("🔄 Redirecting to LinkedIn OAuth...");
@@ -824,9 +816,11 @@ export const getLinkedInProfile = async (req, res) => {
     });
   }
 };
+
 // =========================
 // 11️⃣ Verify Android Session for LinkedIn (NEW)
 // =========================
+
 export const verifyAndroidSessionLinkedin = async (req, res) => {
   try {
     const { userId } = req.query;
@@ -855,7 +849,6 @@ export const verifyAndroidSessionLinkedin = async (req, res) => {
     const isExpired = Date.now() - timestamp > 30 * 60 * 1000;
 
     if (isExpired) {
-      // Clear expired session
       delete req.session.linkedinOAuth;
       req.session.save();
 
