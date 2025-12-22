@@ -827,7 +827,7 @@ export const getLinkedInProfile = async (req, res) => {
 // =========================
 // 11️⃣ Verify Android Session for LinkedIn (NEW)
 // =========================
-export const verifyAndroidSession = async (req, res) => {
+export const verifyAndroidSessionLinkedin = async (req, res) => {
   try {
     const { userId } = req.query;
 
