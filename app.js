@@ -10,7 +10,8 @@ import * as facebookController from "./controllers/social.controller.js";
 import mongoose from "mongoose";
 import session from "express-session";
 import MongoStore from "connect-mongo";
- import twitterRoutes from "./routes/twitter.routes.js";                                                                                                                       
+import twitterRoutes from "./routes/twitter.routes.js";
+import linkedinRoutes from "./routes/linkedin.routes.js";
 //import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
@@ -33,7 +34,10 @@ import {
   checkLinkedInConnection,
   postToLinkedIn,
   disconnectLinkedIn,
+  verifyAndroidSession,
+  getLinkedInProfile,
   getLinkedInPosts // ✅ ADDED NEW IMPORT
+
 } from "./controllers/linkedin.controller.js";
 
 dotenv.config();
@@ -65,7 +69,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-app.use("/api/twitter", twitterRoutes);    
+app.use("/api/twitter", twitterRoutes);
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 //app.use("/automation", automationRoutes);
@@ -123,7 +127,8 @@ app.get("/api/twitter/check", checkTwitterConnection);
 app.post("/api/twitter/post", postToTwitter);
 app.post("/api/twitter/disconnect", disconnectTwitter);
 app.get("/api/twitter/verify-session", verifyAndroidSession);
-app.get("/api/twitter/profile", getTwitterProfile);  
+app.get("/api/twitter/profile", getTwitterProfile);
+
 
 // =========================
 //  📌 LINKEDIN ROUTES
@@ -135,7 +140,8 @@ app.post("/api/linkedin/post", postToLinkedIn);
 app.get("/auth/linkedin/account/:userId", checkLinkedInConnection);
 app.post("/api/linkedin/disconnect", disconnectLinkedIn);
 app.get("/api/linkedin/posts", getLinkedInPosts);
-
+app.get("/api/linkedin/verify-session", verifyAndroidSession);
+app.get("/api/linkedin/profile", getLinkedInProfile);
 // =========================
 //  📌 HEALTH
 // =========================

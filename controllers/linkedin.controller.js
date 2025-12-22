@@ -1,20 +1,22 @@
-// controllers/linkedin.controller.js
+// controllers/linkedin.controller.js - UPDATED WITH ANDROID DEEP LINK
 import dotenv from "dotenv";
 import axios from "axios";
-import TwitterAccount from "../models/TwitterAccount.js"; // Separate file
-import Post from "../models/Post.js"; // Separate file
+import TwitterAccount from "../models/TwitterAccount.js";
+import Post from "../models/Post.js";
 
 dotenv.config();
 
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID;
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET;
 const BACKEND_URL = process.env.BACKEND_URL || "https://automatedpostingbackend.onrender.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com/";
 
-// FIX: Use exact callback URL matching LinkedIn app
-const LINKEDIN_CALLBACK_URL = process.env.LINKEDIN_REDIRECT_URI || "https://automatedpostingbackend.onrender.com/auth/linkedin/callback";
+// Android Deep Link Configuration
+const ANDROID_DEEP_LINK = "com.wingspan.aimediahub://linkedin-callback";
+const LINKEDIN_CALLBACK_URL = process.env.LINKEDIN_REDIRECT_URI || `${BACKEND_URL}/auth/linkedin/callback`;
+
 // =========================
-// 1️⃣ LinkedIn Auth (UPDATED)
+// 1️⃣ LinkedIn Auth (UPDATED WITH ANDROID SUPPORT)
 // =========================
 export const linkedinAuth = async (req, res) => {
   try {
@@ -22,27 +24,23 @@ export const linkedinAuth = async (req, res) => {
     console.log("📌 Request URL:", req.originalUrl);
     console.log("📌 Query Parameters:", JSON.stringify(req.query, null, 2));
     
-    // Check ALL possible userId parameters
     const userId = req.query.userId || req.query.userid || req.query.user_id;
+    const platform = req.query.platform || 'web'; // 'web' or 'android'
     
     if (!userId) {
       console.error("❌ ERROR: No userId found in request!");
-      console.error("📋 All query params:", Object.keys(req.query));
-      
-      // Return JSON error with details
       return res.status(400).json({ 
         success: false, 
         error: "userId parameter required",
         receivedParams: req.query,
-        example: `${BACKEND_URL}/auth/linkedin?userId=your_user_id_here`
+        example: `${BACKEND_URL}/auth/linkedin?userId=your_user_id_here&platform=android`
       });
     }
 
-    console.log("✅ UserId received:", userId);
+    console.log("✅ UserId received:", userId, "Platform:", platform);
     
     // Generate OAuth state
     const state = Math.random().toString(36).substring(7);
-    // FIX: Updated scopes to match what's available in your LinkedIn app
     const scope = encodeURIComponent("profile email w_member_social openid");
     
     // LinkedIn OAuth URL
@@ -52,10 +50,11 @@ export const linkedinAuth = async (req, res) => {
     req.session.linkedinOAuth = {
       state,
       userId,
+      platform,
       timestamp: Date.now()
     };
 
-    // Save session and redirect
+    // Save session
     req.session.save((err) => {
       if (err) {
         console.error("❌ Session save error:", err);
@@ -66,8 +65,24 @@ export const linkedinAuth = async (req, res) => {
       }
       
       console.log("✅ Session saved successfully");
-      console.log("🔄 Redirecting to LinkedIn OAuth...");
-      res.redirect(authUrl);
+      
+      // Handle different platforms
+      if (platform === 'android') {
+        // For Android, return JSON with auth URL and deep link
+        console.log("📱 Android platform detected");
+        res.json({
+          success: true,
+          authUrl: authUrl,
+          deepLink: ANDROID_DEEP_LINK,
+          state: state,
+          userId: userId,
+          message: "Open this URL in browser, then return to app"
+        });
+      } else {
+        // For web, redirect directly
+        console.log("🔄 Redirecting to LinkedIn OAuth...");
+        res.redirect(authUrl);
+      }
     });
     
   } catch (err) {
@@ -80,33 +95,47 @@ export const linkedinAuth = async (req, res) => {
 };
 
 // =========================
-// 2️⃣ LinkedIn Callback (UPDATED)
+// 2️⃣ LinkedIn Callback (UPDATED WITH ANDROID DEEP LINK REDIRECT)
 // =========================
 export const linkedinCallback = async (req, res) => {
   try {
     console.log("🔗 LinkedIn Callback Received");
-    const { code, state } = req.query;
+    console.log("📌 Full query:", req.query);
+    
+    const { code, state, error, error_description } = req.query;
+
+    // Check for OAuth errors
+    if (error) {
+      console.error("❌ LinkedIn OAuth Error:", error_description);
+      const errorUrl = `${FRONTEND_URL}/linkedin-connect?error=${error}&message=${encodeURIComponent(error_description)}`;
+      return res.redirect(errorUrl);
+    }
 
     // Check session exists
     if (!req.session || !req.session.linkedinOAuth) {
       console.error("❌ Session missing in callback");
-      return res.redirect(`${FRONTEND_URL}/linkedin-connect?error=session_missing`);
+      const errorUrl = `${FRONTEND_URL}/linkedin-connect?error=session_missing`;
+      return res.redirect(errorUrl);
     }
 
-    const { state: savedState, userId } = req.session.linkedinOAuth;
+    const { state: savedState, userId, platform } = req.session.linkedinOAuth;
 
     // Verify state
     if (state !== savedState) {
       console.error("❌ State mismatch");
-      return res.redirect(`${FRONTEND_URL}/linkedin-connect?error=invalid_state`);
+      console.log("Received state:", state);
+      console.log("Saved state:", savedState);
+      const errorUrl = `${FRONTEND_URL}/linkedin-connect?error=invalid_state`;
+      return res.redirect(errorUrl);
     }
 
     console.log("🔄 Exchanging code for access token...");
+    console.log("📱 Platform:", platform);
     
-    // FIX: Pass OAuth parameters as query string to avoid 401 error
+    // Exchange code for token
     const tokenResponse = await axios.post(
       `https://www.linkedin.com/oauth/v2/accessToken?grant_type=authorization_code&code=${code}&redirect_uri=${encodeURIComponent(LINKEDIN_CALLBACK_URL)}&client_id=${LINKEDIN_CLIENT_ID}&client_secret=${LINKEDIN_CLIENT_SECRET}`,
-      {}, // Empty body
+      {},
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
@@ -117,7 +146,7 @@ export const linkedinCallback = async (req, res) => {
     const { access_token, expires_in } = tokenResponse.data;
     console.log("✅ Access token received");
 
-    // FIX: Use OpenID Connect userinfo endpoint instead of /me
+    // Get user profile
     console.log("🔄 Fetching LinkedIn profile...");
     const profileResponse = await axios.get(
       'https://api.linkedin.com/v2/userinfo',
@@ -131,7 +160,6 @@ export const linkedinCallback = async (req, res) => {
 
     const profile = profileResponse.data;
     console.log("✅ Profile received:", profile.name);
-    console.log("📋 Profile data:", JSON.stringify(profile, null, 2));
     
     // Save to database
     const savedAccount = await TwitterAccount.findOneAndUpdate(
@@ -139,10 +167,11 @@ export const linkedinCallback = async (req, res) => {
       {
         user: userId,
         platform: "linkedin",
-        providerId: profile.sub, // OpenID Connect uses 'sub'
+        providerId: profile.sub,
         accessToken: access_token,
         refreshToken: '',
         tokenExpiresAt: new Date(Date.now() + expires_in * 1000),
+        loginPlatform: platform || 'web', // Store platform info
         scopes: ["profile", "email", "w_member_social", "openid"],
         meta: {
           twitterId: profile.sub,
@@ -167,26 +196,57 @@ export const linkedinCallback = async (req, res) => {
       if (err) console.error("Session clear error:", err);
     });
 
-    // Redirect to frontend with success
-    const redirectUrl = `${FRONTEND_URL}/linkedin-manager?linkedin=connected&name=${encodeURIComponent(profile.name || 'User')}&userId=${userId}`;
-    console.log("✅ Redirecting to:", redirectUrl);
-    
-    res.redirect(redirectUrl);
+    // Handle different redirects based on platform
+    if (platform === 'android') {
+      // For Android: Redirect to deep link with success data
+      console.log("📱 Redirecting to Android deep link");
+      
+      // Encode success data for deep link
+      const successData = {
+        linkedin: "connected",
+        name: profile.name || 'User',
+        userId: userId,
+        email: profile.email || '',
+        profileImage: profile.picture || "https://cdn-icons-png.flaticon.com/512/174/174857.png"
+      };
+      
+      // Create deep link URL
+      const deepLinkUrl = `${ANDROID_DEEP_LINK}?${new URLSearchParams(successData).toString()}`;
+      console.log("🔗 Android Deep Link:", deepLinkUrl);
+      
+      // Redirect to deep link
+      res.redirect(deepLinkUrl);
+    } else {
+      // For web: Redirect to frontend
+      const redirectUrl = `${FRONTEND_URL}/linkedin-manager?linkedin=connected&name=${encodeURIComponent(profile.name || 'User')}&userId=${userId}`;
+      console.log("🌐 Redirecting to web:", redirectUrl);
+      res.redirect(redirectUrl);
+    }
 
   } catch (err) {
     console.error("❌ LinkedIn Callback Error:", err.message);
     console.error("❌ Error details:", err.response?.data);
-    console.error("❌ Error status:", err.response?.status);
     
     const errorMessage = err.response?.data?.message || err.response?.data?.error_description || err.message;
-    res.redirect(
-      `${FRONTEND_URL}/linkedin-connect?error=auth_failed&message=${encodeURIComponent(errorMessage)}`
-    );
+    
+    // Handle error redirect based on platform
+    const { platform } = req.session?.linkedinOAuth || {};
+    
+    if (platform === 'android') {
+      // Android error deep link
+      const deepLinkUrl = `${ANDROID_DEEP_LINK}?error=auth_failed&message=${encodeURIComponent(errorMessage)}`;
+      res.redirect(deepLinkUrl);
+    } else {
+      // Web error redirect
+      res.redirect(
+        `${FRONTEND_URL}/linkedin-connect?error=auth_failed&message=${encodeURIComponent(errorMessage)}`
+      );
+    }
   }
 };
 
 // =========================
-// 3️⃣ Check LinkedIn Connection
+// 3️⃣ Check LinkedIn Connection (UPDATED WITH PLATFORM INFO)
 // =========================
 export const checkLinkedInConnection = async (req, res) => {
   try {
@@ -216,6 +276,7 @@ export const checkLinkedInConnection = async (req, res) => {
     res.json({
       success: true,
       connected: isTokenValid,
+      platform: account.loginPlatform || 'web',
       account: {
         name: account.meta?.name,
         firstName: account.meta?.firstName,
@@ -226,6 +287,8 @@ export const checkLinkedInConnection = async (req, res) => {
         profileImage: account.meta?.profileImage,
         linkedinId: account.meta?.linkedinId,
         connectedAt: account.createdAt,
+        tokenExpiresAt: account.tokenExpiresAt,
+        loginPlatform: account.loginPlatform
       }
     });
 
@@ -239,7 +302,7 @@ export const checkLinkedInConnection = async (req, res) => {
 };
 
 // =========================
-// 4️⃣ Post to LinkedIn (UPDATED to save posts in database)
+// 4️⃣ Post to LinkedIn (UPDATED)
 // =========================
 export const postToLinkedIn = async (req, res) => {
   try {
@@ -310,7 +373,7 @@ export const postToLinkedIn = async (req, res) => {
     const postId = postResponse.data.id;
     const postUrl = `https://www.linkedin.com/feed/update/${postId}`;
 
-    // ✅ NEW: Save post to database
+    // Save post to database
     try {
       const newPost = new Post({
         user: userId,
@@ -324,7 +387,8 @@ export const postToLinkedIn = async (req, res) => {
           username: account.meta?.username || "",
           name: account.meta?.name || "",
           profileImage: account.meta?.profileImage || "",
-          platformId: account.providerId
+          platformId: account.providerId,
+          loginPlatform: account.loginPlatform || 'web'
         }
       });
 
@@ -333,7 +397,6 @@ export const postToLinkedIn = async (req, res) => {
       
     } catch (dbError) {
       console.error("❌ Error saving post to database:", dbError.message);
-      // Continue even if DB save fails - the post was already published on LinkedIn
     }
 
     res.json({
@@ -363,7 +426,135 @@ export const postToLinkedIn = async (req, res) => {
 };
 
 // =========================
-// 5️⃣ Disconnect LinkedIn
+// 5️⃣ Android Direct Auth (NEW - For direct Android integration)
+// =========================
+export const androidLinkedInAuth = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "userId is required" 
+      });
+    }
+
+    // Generate OAuth state
+    const state = Math.random().toString(36).substring(7);
+    const scope = encodeURIComponent("profile email w_member_social openid");
+    
+    // LinkedIn OAuth URL for Android
+    const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${LINKEDIN_CLIENT_ID}&redirect_uri=${encodeURIComponent(LINKEDIN_CALLBACK_URL)}&state=${state}&scope=${scope}`;
+
+    // Store in session
+    req.session.linkedinOAuth = {
+      state,
+      userId,
+      platform: 'android',
+      timestamp: Date.now()
+    };
+
+    req.session.save((err) => {
+      if (err) {
+        console.error("❌ Session save error:", err);
+        return res.status(500).json({ 
+          success: false, 
+          error: "Session initialization failed" 
+        });
+      }
+      
+      res.json({
+        success: true,
+        authUrl: authUrl,
+        deepLink: ANDROID_DEEP_LINK,
+        state: state,
+        callbackUrl: LINKEDIN_CALLBACK_URL,
+        message: "Open this URL in browser for LinkedIn authentication"
+      });
+    });
+    
+  } catch (err) {
+    console.error("❌ Android LinkedIn Auth Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: "Internal server error" 
+    });
+  }
+};
+
+// =========================
+// 6️⃣ Test Android Deep Link (NEW - For testing)
+// =========================
+export const testAndroidDeepLink = async (req, res) => {
+  try {
+    const { name = "Test User", userId = "test_user_123", success = "true" } = req.query;
+    
+    const testData = {
+      linkedin: success === "true" ? "connected" : "failed",
+      name: name,
+      userId: userId,
+      email: "test@example.com",
+      profileImage: "https://cdn-icons-png.flaticon.com/512/174/174857.png",
+      timestamp: new Date().toISOString()
+    };
+    
+    const deepLinkUrl = `${ANDROID_DEEP_LINK}?${new URLSearchParams(testData).toString()}`;
+    
+    res.json({
+      success: true,
+      deepLink: deepLinkUrl,
+      testData: testData,
+      message: "Use this deep link to test Android app integration"
+    });
+    
+  } catch (err) {
+    console.error("❌ Test Android Deep Link Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+};
+
+// =========================
+// 7️⃣ Get Platform Info (NEW)
+// =========================
+export const getPlatformInfo = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      platforms: {
+        android: {
+          deepLink: ANDROID_DEEP_LINK,
+          supported: true,
+          authEndpoint: `${BACKEND_URL}/auth/linkedin/android`,
+          callbackUrl: LINKEDIN_CALLBACK_URL
+        },
+        web: {
+          authEndpoint: `${BACKEND_URL}/auth/linkedin`,
+          callbackUrl: LINKEDIN_CALLBACK_URL,
+          redirectUrl: `${FRONTEND_URL}/linkedin-manager`
+        }
+      },
+      config: {
+        clientId: LINKEDIN_CLIENT_ID ? "Configured" : "Not configured",
+        callbackUrl: LINKEDIN_CALLBACK_URL,
+        backendUrl: BACKEND_URL,
+        frontendUrl: FRONTEND_URL
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ Get Platform Info Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message 
+    });
+  }
+};
+
+// =========================
+// 8️⃣ Disconnect LinkedIn (UPDATED)
 // =========================
 export const disconnectLinkedIn = async (req, res) => {
   try {
@@ -397,7 +588,7 @@ export const disconnectLinkedIn = async (req, res) => {
 };
 
 // =========================
-// 6️⃣ Test LinkedIn Connection (NEW - for debugging)
+// 9️⃣ Test LinkedIn Connection
 // =========================
 export const testLinkedInConnection = async (req, res) => {
   try {
@@ -423,7 +614,7 @@ export const testLinkedInConnection = async (req, res) => {
       });
     }
 
-    // Test the token by making a simple API call
+    // Test the token
     try {
       const testResponse = await axios.get(
         'https://api.linkedin.com/v2/userinfo',
@@ -439,13 +630,14 @@ export const testLinkedInConnection = async (req, res) => {
         success: true,
         connected: true,
         tokenValid: true,
+        platform: account.loginPlatform || 'web',
         profile: testResponse.data,
         account: {
           name: account.meta?.name,
           email: account.meta?.email,
           providerId: account.providerId,
           tokenExpiresAt: account.tokenExpiresAt,
-          tokenWillExpireIn: Math.floor((account.tokenExpiresAt - new Date()) / (1000 * 60 * 60 * 24)) + " days"
+          loginPlatform: account.loginPlatform
         }
       });
       
@@ -454,11 +646,13 @@ export const testLinkedInConnection = async (req, res) => {
         success: true,
         connected: true,
         tokenValid: false,
+        platform: account.loginPlatform || 'web',
         error: tokenErr.message,
         account: {
           name: account.meta?.name,
           providerId: account.providerId,
-          tokenExpiresAt: account.tokenExpiresAt
+          tokenExpiresAt: account.tokenExpiresAt,
+          loginPlatform: account.loginPlatform
         }
       });
     }
@@ -473,7 +667,7 @@ export const testLinkedInConnection = async (req, res) => {
 };
 
 // =========================
-// 7️⃣ Get User's LinkedIn Posts (NEW)
+// 🔟 Get User's LinkedIn Posts
 // =========================
 export const getLinkedInPosts = async (req, res) => {
   try {
@@ -491,7 +685,7 @@ export const getLinkedInPosts = async (req, res) => {
       platform: "linkedin"
     })
     .sort({ postedAt: -1 })
-    .limit(50); // Limit to last 50 posts
+    .limit(50);
 
     res.json({
       success: true,
