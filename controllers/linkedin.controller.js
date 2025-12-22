@@ -23,14 +23,14 @@ export const linkedinAuth = async (req, res) => {
     console.log("🔍 LinkedIn Auth Route Hit");
     console.log("📌 Request URL:", req.originalUrl);
     console.log("📌 Query Parameters:", JSON.stringify(req.query, null, 2));
-    
+
     const userId = req.query.userId || req.query.userid || req.query.user_id;
     const platform = req.query.platform || 'web'; // 'web' or 'android'
-    
+
     if (!userId) {
       console.error("❌ ERROR: No userId found in request!");
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         error: "userId parameter required",
         receivedParams: req.query,
         example: `${BACKEND_URL}/auth/linkedin?userId=your_user_id_here&platform=android`
@@ -38,11 +38,11 @@ export const linkedinAuth = async (req, res) => {
     }
 
     console.log("✅ UserId received:", userId, "Platform:", platform);
-    
+
     // Generate OAuth state
     const state = Math.random().toString(36).substring(7);
     const scope = encodeURIComponent("profile email w_member_social openid");
-    
+
     // LinkedIn OAuth URL
     const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${LINKEDIN_CLIENT_ID}&redirect_uri=${encodeURIComponent(LINKEDIN_CALLBACK_URL)}&state=${state}&scope=${scope}`;
 
@@ -58,14 +58,14 @@ export const linkedinAuth = async (req, res) => {
     req.session.save((err) => {
       if (err) {
         console.error("❌ Session save error:", err);
-        return res.status(500).json({ 
-          success: false, 
-          error: "Session initialization failed" 
+        return res.status(500).json({
+          success: false,
+          error: "Session initialization failed"
         });
       }
-      
+
       console.log("✅ Session saved successfully");
-      
+
       // Handle different platforms
       if (platform === 'android') {
         // For Android, return JSON with auth URL and deep link
@@ -84,11 +84,11 @@ export const linkedinAuth = async (req, res) => {
         res.redirect(authUrl);
       }
     });
-    
+
   } catch (err) {
     console.error("❌ LinkedIn Auth Error:", err);
-    res.status(500).json({ 
-      success: false, 
+    res.status(500).json({
+      success: false,
       error: "Internal server error during LinkedIn authentication"
     });
   }
@@ -101,7 +101,7 @@ export const linkedinCallback = async (req, res) => {
   try {
     console.log("🔗 LinkedIn Callback Received");
     console.log("📌 Full query:", req.query);
-    
+
     const { code, state, error, error_description } = req.query;
 
     // Check for OAuth errors
@@ -131,7 +131,7 @@ export const linkedinCallback = async (req, res) => {
 
     console.log("🔄 Exchanging code for access token...");
     console.log("📱 Platform:", platform);
-    
+
     // Exchange code for token
     const tokenResponse = await axios.post(
       `https://www.linkedin.com/oauth/v2/accessToken?grant_type=authorization_code&code=${code}&redirect_uri=${encodeURIComponent(LINKEDIN_CALLBACK_URL)}&client_id=${LINKEDIN_CLIENT_ID}&client_secret=${LINKEDIN_CLIENT_SECRET}`,
@@ -160,7 +160,7 @@ export const linkedinCallback = async (req, res) => {
 
     const profile = profileResponse.data;
     console.log("✅ Profile received:", profile.name);
-    
+
     // Save to database
     const savedAccount = await TwitterAccount.findOneAndUpdate(
       { user: userId, platform: "linkedin" },
@@ -200,7 +200,7 @@ export const linkedinCallback = async (req, res) => {
     if (platform === 'android') {
       // For Android: Redirect to deep link with success data
       console.log("📱 Redirecting to Android deep link");
-      
+
       // Encode success data for deep link
       const successData = {
         linkedin: "connected",
@@ -209,11 +209,11 @@ export const linkedinCallback = async (req, res) => {
         email: profile.email || '',
         profileImage: profile.picture || "https://cdn-icons-png.flaticon.com/512/174/174857.png"
       };
-      
+
       // Create deep link URL
       const deepLinkUrl = `${ANDROID_DEEP_LINK}?${new URLSearchParams(successData).toString()}`;
       console.log("🔗 Android Deep Link:", deepLinkUrl);
-      
+
       // Redirect to deep link
       res.redirect(deepLinkUrl);
     } else {
@@ -226,12 +226,12 @@ export const linkedinCallback = async (req, res) => {
   } catch (err) {
     console.error("❌ LinkedIn Callback Error:", err.message);
     console.error("❌ Error details:", err.response?.data);
-    
+
     const errorMessage = err.response?.data?.message || err.response?.data?.error_description || err.message;
-    
+
     // Handle error redirect based on platform
     const { platform } = req.session?.linkedinOAuth || {};
-    
+
     if (platform === 'android') {
       // Android error deep link
       const deepLinkUrl = `${ANDROID_DEEP_LINK}?error=auth_failed&message=${encodeURIComponent(errorMessage)}`;
@@ -251,11 +251,11 @@ export const linkedinCallback = async (req, res) => {
 export const checkLinkedInConnection = async (req, res) => {
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId parameter is required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter is required"
       });
     }
 
@@ -265,14 +265,14 @@ export const checkLinkedInConnection = async (req, res) => {
     });
 
     if (!account) {
-      return res.json({ 
-        success: true, 
-        connected: false 
+      return res.json({
+        success: true,
+        connected: false
       });
     }
 
     const isTokenValid = account.tokenExpiresAt > new Date();
-    
+
     res.json({
       success: true,
       connected: isTokenValid,
@@ -294,9 +294,9 @@ export const checkLinkedInConnection = async (req, res) => {
 
   } catch (err) {
     console.error("Check LinkedIn Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -307,18 +307,18 @@ export const checkLinkedInConnection = async (req, res) => {
 export const postToLinkedIn = async (req, res) => {
   try {
     const { userId, content, visibility = "PUBLIC" } = req.body;
-    
+
     if (!userId || !content) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId and content are required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId and content are required"
       });
     }
 
     if (content.length > 3000) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "Post cannot exceed 3000 characters" 
+      return res.status(400).json({
+        success: false,
+        error: "Post cannot exceed 3000 characters"
       });
     }
 
@@ -328,16 +328,16 @@ export const postToLinkedIn = async (req, res) => {
     });
 
     if (!account) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "LinkedIn account not connected" 
+      return res.status(401).json({
+        success: false,
+        error: "LinkedIn account not connected"
       });
     }
 
     if (account.tokenExpiresAt < new Date()) {
-      return res.status(401).json({ 
-        success: false, 
-        error: "Token expired. Please reconnect your LinkedIn account." 
+      return res.status(401).json({
+        success: false,
+        error: "Token expired. Please reconnect your LinkedIn account."
       });
     }
 
@@ -394,7 +394,7 @@ export const postToLinkedIn = async (req, res) => {
 
       await newPost.save();
       console.log("✅ LinkedIn post saved to database:", postId);
-      
+
     } catch (dbError) {
       console.error("❌ Error saving post to database:", dbError.message);
     }
@@ -409,18 +409,18 @@ export const postToLinkedIn = async (req, res) => {
   } catch (err) {
     console.error("Post to LinkedIn Error:", err.message);
     console.error("Post Error Details:", err.response?.data);
-    
+
     let errorMessage = err.message;
     if (err.response?.data?.message) {
       errorMessage = err.response.data.message;
     } else if (err.response?.data?.error_description) {
       errorMessage = err.response.data.error_description;
     }
-    
-    res.status(500).json({ 
-      success: false, 
+
+    res.status(500).json({
+      success: false,
       error: errorMessage,
-      details: err.response?.data 
+      details: err.response?.data
     });
   }
 };
@@ -431,18 +431,18 @@ export const postToLinkedIn = async (req, res) => {
 export const androidLinkedInAuth = async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId is required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId is required"
       });
     }
 
     // Generate OAuth state
     const state = Math.random().toString(36).substring(7);
     const scope = encodeURIComponent("profile email w_member_social openid");
-    
+
     // LinkedIn OAuth URL for Android
     const authUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${LINKEDIN_CLIENT_ID}&redirect_uri=${encodeURIComponent(LINKEDIN_CALLBACK_URL)}&state=${state}&scope=${scope}`;
 
@@ -457,12 +457,12 @@ export const androidLinkedInAuth = async (req, res) => {
     req.session.save((err) => {
       if (err) {
         console.error("❌ Session save error:", err);
-        return res.status(500).json({ 
-          success: false, 
-          error: "Session initialization failed" 
+        return res.status(500).json({
+          success: false,
+          error: "Session initialization failed"
         });
       }
-      
+
       res.json({
         success: true,
         authUrl: authUrl,
@@ -472,12 +472,12 @@ export const androidLinkedInAuth = async (req, res) => {
         message: "Open this URL in browser for LinkedIn authentication"
       });
     });
-    
+
   } catch (err) {
     console.error("❌ Android LinkedIn Auth Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: "Internal server error" 
+    res.status(500).json({
+      success: false,
+      error: "Internal server error"
     });
   }
 };
@@ -488,7 +488,7 @@ export const androidLinkedInAuth = async (req, res) => {
 export const testAndroidDeepLink = async (req, res) => {
   try {
     const { name = "Test User", userId = "test_user_123", success = "true" } = req.query;
-    
+
     const testData = {
       linkedin: success === "true" ? "connected" : "failed",
       name: name,
@@ -497,21 +497,21 @@ export const testAndroidDeepLink = async (req, res) => {
       profileImage: "https://cdn-icons-png.flaticon.com/512/174/174857.png",
       timestamp: new Date().toISOString()
     };
-    
+
     const deepLinkUrl = `${ANDROID_DEEP_LINK}?${new URLSearchParams(testData).toString()}`;
-    
+
     res.json({
       success: true,
       deepLink: deepLinkUrl,
       testData: testData,
       message: "Use this deep link to test Android app integration"
     });
-    
+
   } catch (err) {
     console.error("❌ Test Android Deep Link Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -543,12 +543,12 @@ export const getPlatformInfo = async (req, res) => {
         frontendUrl: FRONTEND_URL
       }
     });
-    
+
   } catch (err) {
     console.error("❌ Get Platform Info Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -559,30 +559,30 @@ export const getPlatformInfo = async (req, res) => {
 export const disconnectLinkedIn = async (req, res) => {
   try {
     const { userId } = req.body;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId is required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId is required"
       });
     }
 
-    const result = await TwitterAccount.deleteOne({ 
-      user: userId, 
+    const result = await TwitterAccount.deleteOne({
+      user: userId,
       platform: "linkedin"
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: "LinkedIn disconnected successfully",
-      deletedCount: result.deletedCount 
+      deletedCount: result.deletedCount
     });
 
   } catch (err) {
     console.error("LinkedIn Disconnect Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -593,11 +593,11 @@ export const disconnectLinkedIn = async (req, res) => {
 export const testLinkedInConnection = async (req, res) => {
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId parameter is required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter is required"
       });
     }
 
@@ -607,10 +607,10 @@ export const testLinkedInConnection = async (req, res) => {
     });
 
     if (!account) {
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         connected: false,
-        message: "No LinkedIn account found for this user" 
+        message: "No LinkedIn account found for this user"
       });
     }
 
@@ -625,7 +625,7 @@ export const testLinkedInConnection = async (req, res) => {
           }
         }
       );
-      
+
       return res.json({
         success: true,
         connected: true,
@@ -640,7 +640,7 @@ export const testLinkedInConnection = async (req, res) => {
           loginPlatform: account.loginPlatform
         }
       });
-      
+
     } catch (tokenErr) {
       return res.json({
         success: true,
@@ -659,9 +659,9 @@ export const testLinkedInConnection = async (req, res) => {
 
   } catch (err) {
     console.error("Test LinkedIn Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
@@ -672,11 +672,11 @@ export const testLinkedInConnection = async (req, res) => {
 export const getLinkedInPosts = async (req, res) => {
   try {
     const { userId } = req.query;
-    
+
     if (!userId) {
-      return res.status(400).json({ 
-        success: false, 
-        error: "userId parameter is required" 
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter is required"
       });
     }
 
@@ -684,8 +684,8 @@ export const getLinkedInPosts = async (req, res) => {
       user: userId,
       platform: "linkedin"
     })
-    .sort({ postedAt: -1 })
-    .limit(50);
+      .sort({ postedAt: -1 })
+      .limit(50);
 
     res.json({
       success: true,
@@ -695,9 +695,191 @@ export const getLinkedInPosts = async (req, res) => {
 
   } catch (err) {
     console.error("Get LinkedIn Posts Error:", err);
-    res.status(500).json({ 
-      success: false, 
-      error: err.message 
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
+// =========================
+// 🔟 Get LinkedIn Profile (NEW)
+// =========================
+export const getLinkedInProfile = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter is required"
+      });
+    }
+
+    const account = await TwitterAccount.findOne({
+      user: userId,
+      platform: "linkedin",
+    });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: "LinkedIn account not found for this user"
+      });
+    }
+
+    // Check if token is valid
+    const isTokenValid = account.tokenExpiresAt > new Date();
+
+    if (!isTokenValid) {
+      return res.json({
+        success: true,
+        connected: false,
+        message: "Token expired. Please reconnect your LinkedIn account.",
+        profile: {
+          name: account.meta?.name,
+          email: account.meta?.email,
+          profileImage: account.meta?.profileImage,
+          linkedinId: account.meta?.linkedinId,
+          headline: account.meta?.headline
+        }
+      });
+    }
+
+    // Try to fetch fresh profile data from LinkedIn
+    try {
+      const profileResponse = await axios.get(
+        'https://api.linkedin.com/v2/userinfo',
+        {
+          headers: {
+            'Authorization': `Bearer ${account.accessToken}`,
+            'cache-control': 'no-cache'
+          }
+        }
+      );
+
+      const freshProfile = profileResponse.data;
+
+      // Update database with fresh data
+      await TwitterAccount.findOneAndUpdate(
+        { _id: account._id },
+        {
+          'meta.name': freshProfile.name || account.meta?.name,
+          'meta.firstName': freshProfile.given_name || account.meta?.firstName,
+          'meta.lastName': freshProfile.family_name || account.meta?.lastName,
+          'meta.email': freshProfile.email || account.meta?.email,
+          'meta.profileImage': freshProfile.picture || account.meta?.profileImage,
+          'meta.headline': freshProfile.headline || account.meta?.headline
+        }
+      );
+
+      return res.json({
+        success: true,
+        connected: true,
+        profile: {
+          providerId: account.providerId,
+          accessToken: account.accessToken,
+          tokenExpiresAt: account.tokenExpiresAt,
+          loginPlatform: account.loginPlatform || 'web',
+          name: freshProfile.name,
+          firstName: freshProfile.given_name,
+          lastName: freshProfile.family_name,
+          email: freshProfile.email,
+          profileImage: freshProfile.picture,
+          linkedinId: freshProfile.sub,
+          headline: freshProfile.headline,
+          userId: userId
+        }
+      });
+
+    } catch (apiError) {
+      // If API call fails, return cached profile data
+      console.error("LinkedIn API Error:", apiError.message);
+
+      return res.json({
+        success: true,
+        connected: true,
+        cached: true,
+        profile: {
+          providerId: account.providerId,
+          tokenExpiresAt: account.tokenExpiresAt,
+          loginPlatform: account.loginPlatform || 'web',
+          name: account.meta?.name,
+          firstName: account.meta?.firstName,
+          lastName: account.meta?.lastName,
+          email: account.meta?.email,
+          profileImage: account.meta?.profileImage,
+          linkedinId: account.meta?.linkedinId,
+          headline: account.meta?.headline,
+          userId: userId
+        }
+      });
+    }
+
+  } catch (err) {
+    console.error("Get LinkedIn Profile Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+// =========================
+// 11️⃣ Verify Android Session for LinkedIn (NEW)
+// =========================
+export const verifyAndroidSession = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId parameter is required"
+      });
+    }
+
+    // Check if session exists (for LinkedIn OAuth flow)
+    const hasSession = req.session && req.session.linkedinOAuth;
+
+    if (!hasSession) {
+      return res.json({
+        success: true,
+        sessionExists: false,
+        message: "No active LinkedIn OAuth session"
+      });
+    }
+
+    const { state, platform, timestamp } = req.session.linkedinOAuth;
+
+    // Check if session is expired (30 minutes)
+    const isExpired = Date.now() - timestamp > 30 * 60 * 1000;
+
+    if (isExpired) {
+      // Clear expired session
+      delete req.session.linkedinOAuth;
+      req.session.save();
+
+      return res.json({
+        success: true,
+        sessionExists: false,
+        message: "LinkedIn OAuth session expired"
+      });
+    }
+
+    res.json({
+      success: true,
+      sessionExists: true,
+      platform: platform || 'web',
+      state: state,
+      userId: req.session.linkedinOAuth.userId,
+      timestamp: timestamp
+    });
+
+  } catch (err) {
+    console.error("Verify LinkedIn Android Session Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
     });
   }
 };
