@@ -34,7 +34,7 @@ import {
   checkLinkedInConnection,
   postToLinkedIn,
   disconnectLinkedIn,
-  verifyAndroidSession,
+  verifyAndroidSessionLinkedin,
   getLinkedInProfile,
   getLinkedInPosts // ✅ ADDED NEW IMPORT
 
@@ -140,7 +140,7 @@ app.post("/api/linkedin/post", postToLinkedIn);
 app.get("/auth/linkedin/account/:userId", checkLinkedInConnection);
 app.post("/api/linkedin/disconnect", disconnectLinkedIn);
 app.get("/api/linkedin/posts", getLinkedInPosts);
-app.get("/api/linkedin/verify-session", verifyAndroidSession);
+app.get("/api/linkedin/verify-session", verifyAndroidSessionLinkedin);
 app.get("/api/linkedin/profile", getLinkedInProfile);
 // =========================
 //  📌 HEALTH
