@@ -12,7 +12,7 @@ import session from "express-session";
 import MongoStore from "connect-mongo";
 import twitterRoutes from "./routes/twitter.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
-//import automationRoutes from "./routes/automation.routes.js";
+import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
 
@@ -72,7 +72,7 @@ app.use(cookieParser());
 app.use("/api/twitter", twitterRoutes);
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
-//app.use("/automation", automationRoutes);
+app.use("/automation", automationRoutes);
 
 
 // publish & metrics

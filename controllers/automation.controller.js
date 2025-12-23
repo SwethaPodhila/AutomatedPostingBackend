@@ -57,13 +57,13 @@ export const triggerAutomation = async (req, res) => {
     res.status(500).json({ message: "Automation creation failed" });
   }
 };
-
-export const getAccounts = async (req, res) => {
+  
+export const getUserAccounts = async (req, res) => {
+  console.log("Fetching accounts for user:", req.params);
   try {
-    const { userId } = req.query; // frontend should send userId as query param
+    const { userId } = req.params;
     if (!userId) return res.status(400).json({ msg: "User ID is required" });
 
-    // Fetch accounts where user matches userId
     const accounts = await SocialAccount.find({ user: String(userId) });
 
     res.json({ data: accounts });
@@ -72,3 +72,4 @@ export const getAccounts = async (req, res) => {
     res.status(500).json({ msg: "Failed to fetch accounts" });
   }
 };
+  

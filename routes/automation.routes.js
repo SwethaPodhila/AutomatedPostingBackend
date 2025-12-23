@@ -1,9 +1,10 @@
 import express from "express";
-import { triggerMakeAutomation,getUserAccounts } from "../controllers/automation.controller.js";
+import { triggerAutomation,getUserAccounts } from "../controllers/automation.controller.js";
 
 const router = express.Router();
 
-router.post("/trigger", triggerMakeAutomation);
-router.get("/accounts", getUserAccounts);
+router.post("/trigger", triggerAutomation);
+router.get("/accounts/:userId", getUserAccounts);
 
 export default router;
+   
