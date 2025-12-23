@@ -479,7 +479,7 @@ export const publishInstagram = async (req, res) => {
         console.log("Media created on IG:", mediaRes.data);
 
         // 2️⃣ Wait if video
-        if (isVideo) await waitForVideoProcessing(mediaRes.data.id, acc.accessToken);
+        if (isVideo) await waitForMediaReady(mediaRes.data.id, acc.accessToken);
 
         // 3️⃣ Publish media
         const publishRes = await axios.post(
@@ -523,6 +523,40 @@ export const publishInstagram = async (req, res) => {
   } catch (err) {
     console.error("🔥 IG PUBLISH ERROR:", err.response?.data || err.message);
     return res.status(500).json({ success: false });
+  }
+};
+
+const waitForMediaReady = async (creationId, accessToken) => {
+  let status = "IN_PROGRESS";
+  let attempts = 0;
+
+  while (status === "IN_PROGRESS") {
+    attempts++;
+    console.log(`⏳ IG processing attempt #${attempts}`);
+
+    await new Promise(r => setTimeout(r, 5000));
+
+    const res = await axios.get(
+      `https://graph.facebook.com/v19.0/${creationId}`,
+      {
+        params: {
+          fields: "status_code",
+          access_token: accessToken
+        }
+      }
+    );
+
+    status = res.data.status_code;
+    console.log("📸 IG MEDIA STATUS:", status);
+
+    if (status === "ERROR") {
+      console.error("❌ IG returned ERROR status");
+      throw new Error("Instagram media processing failed");
+    }
+
+    if (attempts > 12) {
+      throw new Error("⏰ Timeout waiting for IG media processing");
+    }
   }
 };
 

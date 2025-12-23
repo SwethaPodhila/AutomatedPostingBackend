@@ -54,18 +54,14 @@ router.post(
     controller.publishInstagram
 );
 
-
 // Instagram metrics
 router.get("/instagram/metrics/:userId", controller.instagramMetrics);
-
 
 // GET all connected accounts for user
 router.get("/:userId", async (req, res) => {
     try {
         const { userId } = req.params;
-
         const accounts = await SocialAccount.find({ user: userId });
-
         return res.json({ success: true, accounts });
     } catch (err) {
         console.error(err);
