@@ -43,13 +43,16 @@ export const triggerAutomation = async (req, res) => {
     await Automation.create({
       userId,
       prompt,
-      startDate,
-      endDate,
+
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+
       time,
       pageIds,
       nextRunAt,
       status: "active"
     });
+
 
     res.json({ success: true });
   } catch (err) {
@@ -57,7 +60,7 @@ export const triggerAutomation = async (req, res) => {
     res.status(500).json({ message: "Automation creation failed" });
   }
 };
-  
+
 export const getUserAccounts = async (req, res) => {
   console.log("Fetching accounts for user:", req.params);
   try {
@@ -72,4 +75,3 @@ export const getUserAccounts = async (req, res) => {
     res.status(500).json({ msg: "Failed to fetch accounts" });
   }
 };
-  

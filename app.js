@@ -15,6 +15,8 @@ import linkedinRoutes from "./routes/linkedin.routes.js";
 import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
+// server.js
+import "./cron/autoPost.cron.js";
 
 import {
   twitterAuth,
@@ -37,7 +39,6 @@ import {
   verifyAndroidSessionLinkedin,
   getLinkedInProfile,
   getLinkedInPosts // ✅ ADDED NEW IMPORT
-
 } from "./controllers/linkedin.controller.js";
 
 dotenv.config();
