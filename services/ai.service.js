@@ -4,6 +4,7 @@ import OpenAI from "openai";
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+console.log("OpenAI initialized with API Key:", process.env.OPENAI_API_KEY ? "Yes" : "No");
 
 export async function generateCaption(prompt, day) {
   const res = await openai.chat.completions.create({
