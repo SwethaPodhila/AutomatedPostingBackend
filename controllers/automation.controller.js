@@ -1,7 +1,7 @@
 import Automation from "../models/Automation.js";
 import SocialAccount from "../models/socialAccount.js";
 import TwitterAccount from "../models/TwitterAccount.js";
-import PostedPost from "../models/manualPosts.js";
+import AutoManual from "../models/AutoManual.js";
 import post from "../models/Post.js";
 import { publishToPage } from "../utils/FbApis.js";
 
@@ -127,42 +127,26 @@ export const universalPublish = async (req, res) => {
       times
     } = req.body;
 
-    const parsedPageIds = pageIds ? JSON.parse(pageIds) : [];
-    const parsedTimes = times ? JSON.parse(times) : [];
+    // ✅ SAFE PARSING
+    const parsedPageIds =
+      typeof pageIds === "string" ? JSON.parse(pageIds) : pageIds || [];
+
+    const parsedTimes =
+      typeof times === "string" ? JSON.parse(times) : times || [];
 
     const media = req.file || null;
+
+    const normalizedStartDate = startDate ? new Date(startDate) : null;
+    const normalizedEndDate = endDate ? new Date(endDate) : null;
 
     if (!platform || !userId) {
       return res.status(400).json({ msg: "platform and userId required" });
     }
 
-    /* =====================
-       BUILD SCHEDULE DATES
-    ====================== */
-    const scheduleDates = [];
-
-    if (startDate && endDate && parsedTimes.length) {
-      let current = new Date(startDate);
-      const end = new Date(endDate);
-
-      while (current <= end) {
-        for (const t of parsedTimes) {
-          const [h, m] = t.split(":");
-          const runAt = new Date(current);
-          runAt.setHours(h, m, 0, 0);
-          scheduleDates.push(new Date(runAt));
-        }
-        current.setDate(current.getDate() + 1);
-      }
-    }
-
-    /* =====================
-       FACEBOOK
-    ====================== */
+    // ================= FACEBOOK =================
     if (platform === "facebook") {
-      const results = [];
-
       for (const pageId of parsedPageIds) {
+
         const acc = await SocialAccount.findOne({
           providerId: pageId,
           platform: "facebook",
@@ -177,8 +161,9 @@ export const universalPublish = async (req, res) => {
             : "image"
           : null;
 
-        // 🔥 IMMEDIATE POST
-        if (!scheduleDates.length) {
+        // 🔥 IMMEDIATE
+        if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
           const fbRes = await publishToPage({
             pageAccessToken: acc.accessToken,
             pageId,
@@ -187,49 +172,46 @@ export const universalPublish = async (req, res) => {
             mediaType,
           });
 
-          await PostedPost.create({
+          await AutoManual.create({
             user: userId,
             platform: "facebook",
             pageId,
             message,
             mediaUrl,
             mediaType,
-            status: "posted",
             postId: fbRes?.id,
+            status: "posted",
           });
 
-          results.push({ pageId, postId: fbRes?.id });
-        }
+        } else {
 
-        // 🔥 DAILY SCHEDULE
-        else {
-          for (const runAt of scheduleDates) {
-            await PostedPost.create({
-              user: userId,
-              platform: "facebook",
-              pageId,
-              message,
-              mediaUrl,
-              mediaType,
-              scheduledTime: runAt,
-              status: "scheduled",
-            });
-          }
+          await AutoManual.create({
+            user: userId,
+            platform: "facebook",
+            pageId,
+            message,
+            mediaUrl,
+            mediaType,
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
+            times: parsedTimes,
+            status: "scheduled",
+          });
         }
       }
 
       return res.json({ success: true, platform: "facebook" });
     }
 
-    /* =====================
-       INSTAGRAM
-    ====================== */
+    // ================= INSTAGRAM =================
     if (platform === "instagram") {
+
       if (!media) {
         return res.status(400).json({ msg: "Media required for Instagram" });
       }
 
       for (const pageId of parsedPageIds) {
+
         const acc = await SocialAccount.findOne({
           providerId: pageId,
           platform: "instagram",
@@ -241,7 +223,8 @@ export const universalPublish = async (req, res) => {
         const mediaUrl = media.path;
 
         // 🔥 IMMEDIATE
-        if (!scheduleDates.length) {
+        if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
           const igRes = await publishInstagramUtil({
             igUserId: acc.providerId,
             accessToken: acc.accessToken,
@@ -250,32 +233,31 @@ export const universalPublish = async (req, res) => {
             caption: message,
           });
 
-          await PostedPost.create({
+          await AutoManual.create({
             user: userId,
             platform: "instagram",
             pageId,
             message,
             mediaUrl,
             mediaType,
+            postId: igRes?.postId,
             status: "posted",
-            postId: igRes.postId,
           });
-        }
 
-        // 🔥 DAILY
-        else {
-          for (const runAt of scheduleDates) {
-            await PostedPost.create({
-              user: userId,
-              platform: "instagram",
-              pageId,
-              message,
-              mediaUrl,
-              mediaType,
-              scheduledTime: runAt,
-              status: "scheduled",
-            });
-          }
+        } else {
+
+          await AutoManual.create({
+            user: userId,
+            platform: "instagram",
+            pageId,
+            message,
+            mediaUrl,
+            mediaType,
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
+            times: parsedTimes,
+            status: "scheduled",
+          });
         }
       }
 
@@ -285,7 +267,7 @@ export const universalPublish = async (req, res) => {
     return res.status(400).json({ msg: "Invalid platform" });
 
   } catch (err) {
-    console.error(err);
+    console.error("🔥 PUBLISH ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 };
