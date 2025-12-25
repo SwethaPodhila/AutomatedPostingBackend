@@ -117,52 +117,58 @@ export const getUserAccounts = async (req, res) => {
 
 export const universalPublish = async (req, res) => {
   try {
-    console.log("🔥 UNIVERSAL PUBLISH HIT 🔥");
-    console.log("REQ BODY:", req.body);
-    console.log("REQ FILE:", req.file);
     const {
       platform,
       userId,
       message,
       pageIds,
-      scheduleTime
+      startDate,
+      endDate,
+      times
     } = req.body;
 
     const parsedPageIds = pageIds ? JSON.parse(pageIds) : [];
-
-    console.log("📦 PARSED PAGE IDS:", parsedPageIds);
+    const parsedTimes = times ? JSON.parse(times) : [];
 
     const media = req.file || null;
 
     if (!platform || !userId) {
-      console.warn("❌ Missing platform or userId");
       return res.status(400).json({ msg: "platform and userId required" });
     }
 
-    /* =========================
-       FACEBOOK
-    ========================= */
-    if (platform === "facebook") {
-      console.log("➡️ FACEBOOK FLOW");
+    /* =====================
+       BUILD SCHEDULE DATES
+    ====================== */
+    const scheduleDates = [];
 
-      if (!parsedPageIds.length) {
-        return res.status(400).json({ msg: "pageIds required" });
+    if (startDate && endDate && parsedTimes.length) {
+      let current = new Date(startDate);
+      const end = new Date(endDate);
+
+      while (current <= end) {
+        for (const t of parsedTimes) {
+          const [h, m] = t.split(":");
+          const runAt = new Date(current);
+          runAt.setHours(h, m, 0, 0);
+          scheduleDates.push(new Date(runAt));
+        }
+        current.setDate(current.getDate() + 1);
       }
+    }
 
+    /* =====================
+       FACEBOOK
+    ====================== */
+    if (platform === "facebook") {
       const results = [];
 
       for (const pageId of parsedPageIds) {
-        console.log("📄 Posting to Facebook page:", pageId);
-
         const acc = await SocialAccount.findOne({
           providerId: pageId,
           platform: "facebook",
         });
 
-        if (!acc) {
-          console.warn("❌ Facebook page not connected:", pageId);
-          continue;
-        }
+        if (!acc) continue;
 
         const mediaUrl = media ? media.path : null;
         const mediaType = media
@@ -171,220 +177,115 @@ export const universalPublish = async (req, res) => {
             : "image"
           : null;
 
-        console.log({ pageId, mediaUrl, mediaType });
+        // 🔥 IMMEDIATE POST
+        if (!scheduleDates.length) {
+          const fbRes = await publishToPage({
+            pageAccessToken: acc.accessToken,
+            pageId,
+            message,
+            mediaUrl,
+            mediaType,
+          });
 
-        const fbResult = await publishToPage({
-          pageAccessToken: acc.accessToken,
-          pageId,
-          message,
-          mediaUrl,
-          mediaType,
-          scheduleTime,
-        });
+          await PostedPost.create({
+            user: userId,
+            platform: "facebook",
+            pageId,
+            message,
+            mediaUrl,
+            mediaType,
+            status: "posted",
+            postId: fbRes?.id,
+          });
 
-        console.log("🚀 FB RESULT for page", pageId, fbResult);
+          results.push({ pageId, postId: fbRes?.id });
+        }
 
-        await PostedPost.create({
-          user: userId,
-          platform: "facebook",
-          pageId,
-          message,
-          mediaUrl,
-          mediaType,
-          status: scheduleTime ? "scheduled" : "posted",
-          providerPostId: fbResult?.id || null,
-        });
-
-        results.push({
-          pageId,
-          postId: fbResult?.id || null,
-        });
+        // 🔥 DAILY SCHEDULE
+        else {
+          for (const runAt of scheduleDates) {
+            await PostedPost.create({
+              user: userId,
+              platform: "facebook",
+              pageId,
+              message,
+              mediaUrl,
+              mediaType,
+              scheduledTime: runAt,
+              status: "scheduled",
+            });
+          }
+        }
       }
 
-      console.log("✅ Facebook posting completed for all pages");
-
-      return res.json({
-        success: true,
-        platform: "facebook",
-        results,
-      });
+      return res.json({ success: true, platform: "facebook" });
     }
 
-    /* =========================
+    /* =====================
        INSTAGRAM
-    ========================= */
+    ====================== */
     if (platform === "instagram") {
-      console.log("➡️ INSTAGRAM FLOW STARTED");
-
-      if (!parsedPageIds.length || !media) {
-        return res.status(400).json({ msg: "pageIds & media required" });
+      if (!media) {
+        return res.status(400).json({ msg: "Media required for Instagram" });
       }
 
-      const results = [];
-
       for (const pageId of parsedPageIds) {
-        console.log("📸 Posting to Instagram account:", pageId);
-
         const acc = await SocialAccount.findOne({
           providerId: pageId,
           platform: "instagram",
         });
 
-        if (!acc) {
-          console.warn("❌ Instagram not connected:", pageId);
-          continue;
-        }
+        if (!acc) continue;
 
         const mediaType = media.mimetype.startsWith("video") ? "video" : "image";
         const mediaUrl = media.path;
 
-        console.log({ pageId, mediaUrl, mediaType });
+        // 🔥 IMMEDIATE
+        if (!scheduleDates.length) {
+          const igRes = await publishInstagramUtil({
+            igUserId: acc.providerId,
+            accessToken: acc.accessToken,
+            mediaUrl,
+            mediaType,
+            caption: message,
+          });
 
-        const igResult = await publishInstagramUtil({
-          igUserId: acc.providerId,
-          accessToken: acc.accessToken,
-          mediaUrl,
-          mediaType,
-          caption: message,
-        });
+          await PostedPost.create({
+            user: userId,
+            platform: "instagram",
+            pageId,
+            message,
+            mediaUrl,
+            mediaType,
+            status: "posted",
+            postId: igRes.postId,
+          });
+        }
 
-        console.log("🚀 IG RESULT:", igResult);
-
-        await PostedPost.create({
-          user: userId,
-          platform: "instagram",
-          pageId,
-          message,
-          mediaUrl,
-          mediaType,
-          status: "posted",
-          providerPostId: igResult.postId,
-        });
-
-        results.push({
-          pageId,
-          postId: igResult.postId,
-        });
+        // 🔥 DAILY
+        else {
+          for (const runAt of scheduleDates) {
+            await PostedPost.create({
+              user: userId,
+              platform: "instagram",
+              pageId,
+              message,
+              mediaUrl,
+              mediaType,
+              scheduledTime: runAt,
+              status: "scheduled",
+            });
+          }
+        }
       }
 
-      console.log("✅ Instagram posting completed");
-
-      return res.json({
-        success: true,
-        platform: "instagram",
-        results,
-      });
-    }
-    /* =========================
-       TWITTER
-    ========================= */
-    if (platform === "twitter") {
-      console.log("➡️ TWITTER FLOW");
-
-      if (!message) {
-        console.warn("❌ Tweet content missing");
-        return res.status(400).json({ msg: "Tweet content required" });
-      }
-
-      const acc = await TwitterAccount.findOne({
-        user: userId,
-        platform: "twitter",
-      });
-
-      if (!acc) {
-        console.warn("❌ Twitter not connected for user");
-        return res.status(401).json({ msg: "Twitter not connected" });
-      }
-
-      console.log("TWITTER ACCOUNT:", acc);
-      console.log("TWEET CONTENT:", message);
-
-      // 👉 twitter post logic
-      // const tweet = await client.v2.tweet(message);
-      // console.log("TWEET RESULT:", tweet);
-
-      await post.create({
-        user: userId,
-        platform: "twitter",
-        message,
-        status: "posted",
-      });
-
-      console.log("✅ Tweet saved to DB");
-      return res.json({ success: true, platform: "twitter" });
+      return res.json({ success: true, platform: "instagram" });
     }
 
-    /* =========================
-       LINKEDIN
-    ========================= */
-    if (platform === "linkedin") {
-      console.log("➡️ LINKEDIN FLOW");
-
-      if (!message) {
-        console.warn("❌ LinkedIn content missing");
-        return res.status(400).json({ msg: "Content required" });
-      }
-
-      const acc = await SocialAccount.findOne({
-        user: userId,
-        platform: "linkedin",
-      });
-
-      if (!acc) {
-        console.warn("❌ LinkedIn not connected for user");
-        return res.status(401).json({ msg: "LinkedIn not connected" });
-      }
-
-      console.log("LINKEDIN ACCOUNT:", acc);
-      console.log("LINKEDIN CONTENT:", message);
-
-      // 👉 linkedin post logic
-      // const linkedinRes = await axios.post(...);
-      // console.log("LINKEDIN API RESULT:", linkedinRes.data);
-
-      await PostedPost.create({
-        user: userId,
-        platform: "linkedin",
-        message,
-        status: "posted",
-      });
-
-      console.log("✅ LinkedIn post saved to DB");
-      return res.json({ success: true, platform: "linkedin" });
-    }
-
-    console.warn("❌ Invalid platform received:", platform);
     return res.status(400).json({ msg: "Invalid platform" });
 
   } catch (err) {
-    console.error("❌ UNIVERSAL ERROR:", err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-const waitForMediaReady = async (creationId, accessToken) => {
-  let status = "IN_PROGRESS";
-  let attempts = 0;
-
-  while (status !== "FINISHED" && attempts < 10) {
-    await new Promise((r) => setTimeout(r, 3000)); // ⏳ wait 3 sec
-
-    const res = await axios.get(
-      `https://graph.facebook.com/v19.0/${creationId}`,
-      {
-        params: {
-          fields: "status_code",
-          access_token: accessToken,
-        },
-      }
-    );
-
-    status = res.data.status_code;
-    console.log("⏳ IG MEDIA STATUS:", status);
-    attempts++;
-  }
-
-  if (status !== "FINISHED") {
-    throw new Error("Media processing timeout");
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 };

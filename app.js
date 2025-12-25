@@ -16,7 +16,7 @@ import automationRoutes from "./routes/automation.routes.js";
 
 //import "./cron/automation.cron.js";
 // server.js
-import "./cron/autoPost.cron.js";
+import "./cron/manualDailyCron.js";
 
 import {
   twitterAuth,
