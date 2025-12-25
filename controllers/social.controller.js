@@ -107,6 +107,7 @@ export const callback = async (req, res) => {
 
 export const publish = async (req, res) => {
   try {
+    console.log("🔥 FACEBOOK PUBLISH HIT 🔥");
     const { pageId, message, userId, scheduleTime } = req.body;
     const media = req.file;
 
@@ -115,6 +116,9 @@ export const publish = async (req, res) => {
 
     if (!message && !media)
       return res.status(400).json({ msg: "Message or media required" });
+
+    console.log("REQ pageId:", pageId);
+    console.log("DB facebook accounts:", await SocialAccount.find({ platform: "facebook" }));
 
     const acc = await SocialAccount.findOne({
       providerId: pageId,
@@ -177,7 +181,6 @@ export const getPostedPosts = async (req, res) => {
     return res.status(500).json({ success: false });
   }
 };
-
 
 // 4) Metrics: simple followers count for a page
 export const metrics = async (req, res) => {
