@@ -13,6 +13,10 @@ import MongoStore from "connect-mongo";
 import twitterRoutes from "./routes/twitter.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
 import automationRoutes from "./routes/automation.routes.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
+import multer from "multer";
 
 //import "./cron/automation.cron.js";
 // server.js
@@ -77,12 +81,50 @@ app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
 
+// =========================
+// PATH SETUP
+// =========================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // =========================
 // MIDDLEWARE
 // =========================
 app.use(express.json()); // For parsing application/json
 app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
+
+
+// =========================
+// UPLOAD DIRECTORIES
+// =========================
+const uploadsDir = path.join(__dirname, "uploads");
+const twitterUploadsDir = path.join(uploadsDir, "twitter");
+
+if (!fs.existsSync(twitterUploadsDir)) {
+  fs.mkdirSync(twitterUploadsDir, { recursive: true });
+  console.log("📁 Upload directories created");
+}
+
+// =========================
+// MULTER CONFIG
+// =========================
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, twitterUploadsDir),
+  filename: (req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "media-" + unique + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
+    if (allowed.test(file.mimetype)) cb(null, true);
+    else cb(new Error("Only images & videos allowed"));
+  }
+});
 
 
 // publish & metrics
