@@ -1,9 +1,12 @@
 import cron from "node-cron";
 import AutoManual from "../models/AutoManual.js";
 import SocialAccount from "../models/socialAccount.js";
+import TwitterAccount from "../models/TwitterAccount.js";
 import { publishToPage } from "../utils/FbApis.js";
 import { publishInstagramUtil } from "../utils/instagramApi.js";
+import { publishToLinkedIn } from "../utils/linkedinApi.js";
 
+// 🔁 Runs every minute
 cron.schedule("* * * * *", async () => {
   try {
     // 🇮🇳 IST time
@@ -12,13 +15,13 @@ cron.schedule("* * * * *", async () => {
     );
 
     const currentTime = istNow.toTimeString().slice(0, 5); // HH:mm
-    const todayStr = istNow.toISOString().split("T")[0];  // YYYY-MM-DD
+    const todayStr = istNow.toLocaleDateString("en-CA"); // YYYY-MM-DD
 
     console.log("⏰ Cron Running");
     console.log("📅 IST Date:", todayStr);
     console.log("🕒 IST Time:", currentTime);
 
-    // 1️⃣ First: time + status match
+    // 1️⃣ Fetch scheduled posts for this minute
     const posts = await AutoManual.find({
       status: "scheduled",
       times: currentTime,
@@ -28,44 +31,41 @@ cron.schedule("* * * * *", async () => {
 
     for (const post of posts) {
       try {
-        // 2️⃣ Date range match
-        const startDateStr = new Date(post.startDate)
-          .toISOString()
-          .split("T")[0];
+        // 2️⃣ Date range check
+        const startDateStr = new Date(post.startDate).toLocaleDateString("en-CA");
+        const endDateStr = new Date(post.endDate).toLocaleDateString("en-CA");
 
-        const endDateStr = new Date(post.endDate)
-          .toISOString()
-          .split("T")[0];
-
-        // ❌ If today not in range → skip
         if (todayStr < startDateStr || todayStr > endDateStr) {
           console.log("⏭ Skipped (date not in range)");
           continue;
         }
 
-        // 3️⃣ Duplicate protection (same minute)
-        if (post.lastRunAt) {
-          const diff = (istNow - post.lastRunAt) / 1000;
-          if (diff < 60) {
-            console.log("⏭ Duplicate skipped");
-            continue;
-          }
-        }
+        // 🚫 IMPORTANT:
+        // ❌ lastRunAt duplicate logic REMOVED
+        // because same post may have multiple pages
 
-        // 4️⃣ Get social account
-        const acc = await SocialAccount.findOne({
+        // 3️⃣ Account lookup
+        let acc = await SocialAccount.findOne({
           providerId: post.pageId,
           platform: post.platform,
         });
 
+        if (!acc && post.platform === "linkedin") {
+          acc = await TwitterAccount.findOne({
+            providerId: post.pageId,
+            platform: "linkedin",
+          });
+        }
+
         if (!acc) {
-          console.log("❌ Account not found");
+          console.log("❌ Account not found:", post.pageId, post.platform);
           continue;
         }
 
+        console.log("✅ Found account:", acc.meta?.username || acc.user);
         console.log("🚀 Posting to", post.platform);
 
-        // 5️⃣ Publish
+        // 4️⃣ Publish
         if (post.platform === "facebook") {
           await publishToPage({
             pageAccessToken: acc.accessToken,
@@ -86,15 +86,28 @@ cron.schedule("* * * * *", async () => {
           });
         }
 
-        // 6️⃣ Save last run
+        if (post.platform === "linkedin") {
+          await publishToLinkedIn({
+            accessToken: acc.accessToken,
+            providerId: acc.providerId,   // 🔥 REQUIRED
+            content: post.message,        // 🔥 correct key
+            mediaPath: post.mediaUrl || null,
+            mediaType: post.mediaType || null,
+          });
+        }
+
+        // 5️⃣ Mark as completed
+        post.status = "completed";
         post.lastRunAt = istNow;
         await post.save();
 
-        console.log("✅ Post Published");
+        console.log("✅ Post Published Successfully");
 
       } catch (err) {
         console.error("❌ Post Error:", err.message);
+
         post.status = "failed";
+        post.errorMessage = err.message;
         await post.save();
       }
     }

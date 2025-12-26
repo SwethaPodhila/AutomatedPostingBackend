@@ -6,6 +6,7 @@ import post from "../models/Post.js";
 import { publishToPage } from "../utils/FbApis.js";
 
 import { publishInstagramUtil } from "../utils/instagramApi.js";
+import { publishToLinkedIn } from "../utils/linkedinApi.js";
 
 export const triggerAutomation = async (req, res) => {
   try {
@@ -129,6 +130,9 @@ export const universalPublish = async (req, res) => {
       endDate,
       times
     } = req.body;
+
+    console.log("REQ BODY RAW:", req.body);
+    console.log("REQ FILE RAW:", req.file);
 
     // ✅ SAFE PARSING
     const parsedPageIds =
@@ -266,6 +270,76 @@ export const universalPublish = async (req, res) => {
 
       return res.json({ success: true, platform: "instagram" });
     }
+
+    // ================= LINKEDIN =================
+    if (platform === "linkedin") {
+
+      console.log("🔵 ENTERED LINKEDIN BLOCK");
+
+      const acc = await TwitterAccount.findOne({
+        providerId: parsedPageIds[0],
+        platform: "linkedin",
+      });
+
+      if (!acc) {
+        return res.status(400).json({ error: "LinkedIn account not found" });
+      }
+
+      const mediaType = req.file
+        ? req.file.mimetype.startsWith("video")
+          ? "video"
+          : "image"
+        : null;
+
+      // ✅ VERY IMPORTANT
+      const mediaUrl = req.file ? req.file.path : null;
+
+      // 🔥 IMMEDIATE POST
+      if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
+        console.log("📤 Publishing to LinkedIn");
+
+        const liRes = await publishToLinkedIn({
+          accessToken: acc.accessToken,
+          providerId: acc.providerId,
+          content: message,
+          mediaUrl,          // ✅ PASS URL
+          mediaType,
+        });
+
+        await AutoManual.create({
+          user: userId,
+          platform: "linkedin",
+          pageId: acc.providerId,
+          message,
+          mediaType,
+          mediaUrl,          // ✅ SAVED
+          postId: liRes.postId,
+          postUrl: liRes.postUrl,
+          status: "posted",
+        });
+
+      }
+      // ⏰ SCHEDULE
+      else {
+
+        await AutoManual.create({
+          user: userId,
+          platform: "linkedin",
+          pageId: acc.providerId,
+          message,
+          mediaType,
+          mediaUrl,          // ✅ SAVED
+          startDate: normalizedStartDate,
+          endDate: normalizedEndDate,
+          times: parsedTimes,
+          status: "scheduled",
+        });
+      }
+
+      return res.json({ success: true, platform: "linkedin" });
+    }
+    
 
     return res.status(400).json({ msg: "Invalid platform" });
 

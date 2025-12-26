@@ -9,7 +9,7 @@ const AutoManual = new mongoose.Schema(
 
     platform: {
       type: String,
-      enum: ["facebook", "instagram"],
+      enum: ["facebook", "instagram","linkedin", "twitter"],
       required: true,
     },
 
@@ -35,7 +35,7 @@ const AutoManual = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["scheduled", "posted", "failed"],
+      enum: ["scheduled", "posted", "failed","completed"],
       default: "scheduled",
     },
 
