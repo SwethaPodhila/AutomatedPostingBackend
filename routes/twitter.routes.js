@@ -3,33 +3,43 @@ import {
   twitterAuth,
   twitterCallback,
   checkTwitterConnection,
-  postToTwitter,
+  publishTweet,
   disconnectTwitter,
   verifyAndroidSession,
   getTwitterProfile,
-  getTwitterAccount
+  generateTwitterCaption,
+  getTwitterPosts,
+  deleteScheduledTweet
 } from "../controllers/twitter.controller.js";
- 
+
 const router = express.Router();
- 
-// ==================== TWITTER ROUTES ====================
- 
-// 🔹 Check Connection
+
+// Auth
+router.get("/auth", twitterAuth);
+router.get("/auth/callback", twitterCallback);
+
+// Check connection
 router.get("/check", checkTwitterConnection);
- 
-// 🔹 Post Tweet
-router.post("/post", postToTwitter);
- 
-// 🔹 Get Profile (QUERY PARAM)
+
+// Publish tweet (NO MEDIA)
+router.post("/publish", publishTweet);
+
+// AI caption
+router.post("/ai-generate", generateTwitterCaption);
+
+// Get posts
+router.get("/posts", getTwitterPosts);
+
+// Delete scheduled tweet
+router.delete("/post/delete", deleteScheduledTweet);
+
+// Get profile
 router.get("/profile", getTwitterProfile);
- 
-// 🔹 Get Account (URL PARAM)
-router.get("/account/:userId", getTwitterAccount);
- 
-// 🔹 Disconnect Twitter (POST method)
+
+// Disconnect
 router.post("/disconnect", disconnectTwitter);
- 
-// 🔹 Verify Android Session
+
+// Verify Android session
 router.get("/verify-session", verifyAndroidSession);
- 
+
 export default router;

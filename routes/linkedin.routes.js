@@ -1,4 +1,3 @@
-// linkedin.routes.js - UPDATED WITH ALL IMPORTS
 import express from "express";
 import multer from "multer";
 import path from "path";
@@ -14,41 +13,48 @@ import {
     androidLinkedInAuth,
     testAndroidDeepLink,
     getPlatformInfo,
-    getLinkedInProfile,  // ✅ ADD THIS IMPORT
-    verifyAndroidSessionLinkedin  // ✅ ADD THIS IMPORT
+    getLinkedInProfile,
+    verifyAndroidSessionLinkedin,
+    generateLinkedInCaption,
+    deleteScheduledLinkedInPost
 } from "../controllers/linkedin.controller.js";
  
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
  
 const router = express.Router();
- 
-// Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/')
+  destination: (req, file, cb) => {
+    // Check if it's LinkedIn or Twitter
+    const isLinkedIn = req.originalUrl.includes('linkedin');
+    const destination = isLinkedIn ? uploadsDir : twitterUploadsDir;
+    cb(null, destination);
   },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  filename: (req, file, cb) => {
+    const unique = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "media-" + unique + path.extname(file.originalname));
   }
 });
- 
+
 const upload = multer({
-  storage: storage,
-  limits: { fileSize: 50 * 1024 * 1024 },
+  storage,
+  limits: { 
+    fileSize: 200 * 1024 * 1024, // ✅ INCREASED: 200MB for all files
+    files: 1 // Limit to 1 file
+  },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|mp4|mov|avi|webm/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-   
+    const allowed = /jpeg|jpg|png|gif|mp4|mov|avi|webm|mkv|flv|wmv/i;
+    const extname = allowed.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowed.test(file.mimetype);
+    
     if (mimetype && extname) {
-      return cb(null, true);
+      cb(null, true);
     } else {
-      cb(new Error('Only image and video files are allowed'));
+      cb(new Error(`File type not allowed. Allowed: JPEG, PNG, GIF, MP4, MOV, AVI`));
     }
   }
 });
+
  
 // LinkedIn OAuth Routes
 router.get("/", linkedinAuth);  // /auth/linkedin?userId=...&platform=android
@@ -62,10 +68,12 @@ router.get("/test-connection", testLinkedInConnection);  // /auth/linkedin/test-
 router.get("/posts", getLinkedInPosts);  // /auth/linkedin/posts?userId=...
 router.get("/profile", getLinkedInProfile);  // /auth/linkedin/profile?userId=...
 router.get("/verify-session", verifyAndroidSessionLinkedin);  // /auth/linkedin/verify-session?userId=...
+router.post("/ai-generate", generateLinkedInCaption);  // /auth/linkedin/ai-generate
+router.delete("/post/delete", deleteScheduledLinkedInPost);  // /auth/linkedin/post/delete
  
 // Android-specific Routes
 router.post("/android", androidLinkedInAuth);  // /auth/linkedin/android (POST for Android app)
 router.get("/android/test", testAndroidDeepLink);  // /auth/linkedin/android/test
 router.get("/platform-info", getPlatformInfo);  // /auth/linkedin/platform-info
  
-export default router;  
+export default router;

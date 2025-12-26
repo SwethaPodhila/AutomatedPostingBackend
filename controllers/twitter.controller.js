@@ -23,24 +23,26 @@ const twitterClient = new TwitterApi({
 const refreshAccessToken = async (refreshToken) => {
   try {
     console.log("🔄 Attempting to refresh access token...");
-
     const {
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken
+      refreshToken: newRefreshToken,
+      expiresIn
     } = await twitterClient.refreshOAuth2Token(refreshToken);
-
+    
     console.log("✅ Token refreshed successfully");
-
     return {
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken
+      refreshToken: newRefreshToken,
+      expiresIn
     };
   } catch (refreshError) {
     console.error("❌ Token refresh failed:", refreshError.message);
-    throw new Error("Token refresh failed. Please reconnect your Twitter account.");
+    if (refreshError.code === 400) {
+      throw new Error("Refresh token invalid or expired. Please reconnect your Twitter account.");
+    }
+    throw new Error(`Token refresh failed: ${refreshError.message}`);
   }
 };
-
 // =========================
 // HELPER: GET VALID CLIENT
 // =========================
@@ -48,46 +50,46 @@ const getValidTwitterClient = async (account) => {
   try {
     let accessToken = account.accessToken;
     let refreshToken = account.refreshToken;
-    let tokenUpdated = false;
 
     // First, try with current token
     const client = new TwitterApi(accessToken);
 
     try {
-      // Quick test to see if token is valid
       await client.v2.me();
       console.log("✅ Token is valid");
       return { client, accessToken, refreshToken };
     } catch (tokenError) {
-      console.log("⚠️ Token appears invalid, attempting refresh...");
-
-      // Try to refresh the token
-      try {
+      console.log("⚠️ Token appears invalid, error:", tokenError.message);
+      
+      // If we have a refresh token, try to refresh
+      if (refreshToken) {
+        console.log("🔄 Attempting token refresh...");
         const newTokens = await refreshAccessToken(refreshToken);
-        accessToken = newTokens.accessToken;
-        refreshToken = newTokens.refreshToken;
-        tokenUpdated = true;
-
+        
         // Update in database
         await TwitterAccount.findByIdAndUpdate(account._id, {
           accessToken: newTokens.accessToken,
           refreshToken: newTokens.refreshToken,
+          tokenExpiresAt: new Date(Date.now() + (newTokens.expiresIn * 1000)),
           updatedAt: new Date()
         });
 
         console.log("✅ Token refreshed and saved to database");
-        return { client: new TwitterApi(accessToken), accessToken, refreshToken };
-      } catch (refreshError) {
-        console.error("❌ Failed to refresh token, token may be permanently invalid");
-        throw new Error("Authentication expired. Please reconnect your Twitter account.");
+        return { 
+          client: new TwitterApi(newTokens.accessToken), 
+          accessToken: newTokens.accessToken, 
+          refreshToken: newTokens.refreshToken 
+        };
+      } else {
+        console.error("❌ No refresh token available");
+        throw new Error("No refresh token available. Please reconnect your Twitter account.");
       }
     }
   } catch (error) {
-    console.error("❌ Error getting valid client:", error);
+    console.error("❌ Error getting valid client:", error.message);
     throw error;
   }
 };
-
 // =========================
 // 1️⃣ TWITTER AUTH
 // =========================
@@ -96,11 +98,8 @@ export const twitterAuth = async (req, res) => {
     const { userId, platform } = req.query;
     if (!userId) return res.status(400).send("userId required");
 
-    console.log(`🔥 RAW PARAMS: platform=${platform}, userId=${userId}`);
-
-    // Use platform from query or default to web
+    console.log(`🔥 Twitter Auth Request: userId=${userId}, platform=${platform || 'web'}`);
     let loginPlatform = platform || "web";
-    console.log(`📱 Final Platform: ${loginPlatform}`);
 
     const { url, codeVerifier, state } = twitterClient.generateOAuth2AuthLink(
       TWITTER_CALLBACK_URL,
@@ -124,9 +123,7 @@ export const twitterAuth = async (req, res) => {
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    console.log(`✅ OAuth saved: ${loginPlatform} flow`);
-    console.log(`📝 State: ${state.substring(0, 10)}...`);
-
+    console.log(`✅ OAuth saved for ${loginPlatform} flow`);
     res.redirect(url);
 
   } catch (err) {
@@ -143,9 +140,14 @@ export const twitterAuth = async (req, res) => {
 // =========================
 export const twitterCallback = async (req, res) => {
   console.log("🚨 Twitter Callback Triggered");
-
   try {
-    const { code, state } = req.query;
+    const { code, state, error: twitterError } = req.query;
+    
+    if (twitterError) {
+      console.error("❌ Twitter auth error:", twitterError);
+      return sendErrorResponse(res, `Twitter authentication failed: ${twitterError}`, "web");
+    }
+    
     if (!code || !state) return res.status(400).send("Missing code or state");
 
     // Find account
@@ -155,60 +157,69 @@ export const twitterCallback = async (req, res) => {
     });
 
     if (!account) {
-      console.error("❌ Session expired - No account found");
-      return sendErrorResponse(res, "Session expired", "web");
+      console.error("❌ Session expired - No account found for state:", state);
+      return sendErrorResponse(res, "Session expired. Please try again.", "web");
     }
 
-    console.log(`✅ Account Found: ${account.user}, Platform: ${account.loginPlatform}`);
-
+    console.log(`✅ Account Found: ${account.user}, Platform: ${account.loginPlatform || 'web'}`);
     const { oauthCodeVerifier, user: userId, loginPlatform } = account;
 
-    // Get access token with offline.access for refresh tokens
-    const { accessToken, refreshToken, expiresIn } = await twitterClient.loginWithOAuth2({
-      code,
-      codeVerifier: oauthCodeVerifier,
-      redirectUri: TWITTER_CALLBACK_URL
-    });
+    // Get access token
+    try {
+      const { accessToken, refreshToken, expiresIn } = await twitterClient.loginWithOAuth2({
+        code,
+        codeVerifier: oauthCodeVerifier,
+        redirectUri: TWITTER_CALLBACK_URL
+      });
 
-    console.log(`✅ Tokens received. Expires in: ${expiresIn} seconds`);
+      console.log(`✅ Tokens received. Expires in: ${expiresIn} seconds`);
 
-    // Create client and get user info
-    const userClient = new TwitterApi(accessToken);
-    const user = await userClient.v2.me();
+      // Create client and get user info
+      const userClient = new TwitterApi(accessToken);
+      const user = await userClient.v2.me({
+        "user.fields": ["profile_image_url", "username", "name", "id"]
+      });
 
-    console.log(`✅ Twitter User: @${user.data.username}`);
+      console.log(`✅ Twitter User: @${user.data.username} (${user.data.id})`);
 
-    // Prepare update data
-    const updateData = {
-      providerId: user.data.id,
-      accessToken,
-      refreshToken,
-      tokenExpiresAt: new Date(Date.now() + (expiresIn * 1000)),
-      scopes: ["tweet.read", "tweet.write", "users.read", "offline.access"],
-      meta: {
-        twitterId: user.data.id,
-        username: user.data.username,
-        name: user.data.name
-      },
-      oauthState: null,
-      oauthCodeVerifier: null,
-      oauthCreatedAt: null,
-      updatedAt: new Date()
-    };
+      // Prepare update data
+      const updateData = {
+        providerId: user.data.id,
+        accessToken,
+        refreshToken,
+        tokenExpiresAt: new Date(Date.now() + (expiresIn * 1000)),
+        scopes: ["tweet.read", "tweet.write", "users.read", "offline.access"],
+        meta: {
+          twitterId: user.data.id,
+          username: user.data.username,
+          name: user.data.name,
+          profileImageUrl: user.data.profile_image_url
+        },
+        oauthState: null,
+        oauthCodeVerifier: null,
+        oauthCreatedAt: null,
+        updatedAt: new Date(),
+        lastTokenRefresh: new Date()
+      };
 
-    // 🎯 ANDROID: Create Session ID
-    let sessionId = null;
-    if (loginPlatform === "android") {
-      sessionId = `tw_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
-      updateData.androidSessionId = sessionId;
-      console.log(`📱📱 ANDROID SESSION CREATED: ${sessionId}`);
+      // ANDROID: Create Session ID
+      let sessionId = null;
+      if (loginPlatform === "android") {
+        sessionId = `tw_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+        updateData.androidSessionId = sessionId;
+        console.log(`📱 ANDROID SESSION CREATED: ${sessionId}`);
+      }
+
+      // Save to database
+      await TwitterAccount.findByIdAndUpdate(account._id, updateData);
+
+      // Redirect based on platform
+      return handleRedirect(res, loginPlatform || "web", user.data, userId, sessionId, accessToken);
+
+    } catch (authError) {
+      console.error("❌ Auth token exchange failed:", authError.message);
+      return sendErrorResponse(res, `Authentication failed: ${authError.message}`, loginPlatform || "web");
     }
-
-    // Save to database
-    await TwitterAccount.findByIdAndUpdate(account._id, updateData);
-
-    // 🎯 Redirect based on platform
-    return handleRedirect(res, loginPlatform, user.data, userId, sessionId, accessToken);
 
   } catch (err) {
     console.error("❌ Callback Error:", err);
@@ -219,28 +230,19 @@ export const twitterCallback = async (req, res) => {
 };
 
 // =========================
-// 3️⃣ POST TWEET (WITH TOKEN REFRESH)
+// 3️⃣ POST TWEET (TEXT ONLY – FIXED)
 // =========================
-export const postToTwitter = async (req, res) => {
+export const publishTweet = async (req, res) => {
   try {
-    console.log("📝 Tweet request received:", req.body);
+    const { userId, content, scheduleTime } = req.body;
 
-    const { userId, content } = req.body;
     if (!userId || !content) {
       return res.status(400).json({
         success: false,
-        error: "userId and content required"
+        error: "userId and content are required"
       });
     }
 
-    if (!content.trim()) {
-      return res.status(400).json({
-        success: false,
-        error: "Tweet content cannot be empty"
-      });
-    }
-
-    // Find account
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
@@ -249,91 +251,242 @@ export const postToTwitter = async (req, res) => {
     if (!account) {
       return res.status(401).json({
         success: false,
-        error: "Twitter not connected. Please connect your Twitter account first."
+        error: "Twitter not connected"
       });
     }
 
-    if (!account.accessToken) {
-      return res.status(401).json({
-        success: false,
-        error: "Access token missing. Please reconnect."
-      });
-    }
+    // Save post first
+    const post = await Post.create({
+      user: userId,
+      platform: "twitter",
+      content,
+      status: scheduleTime ? "scheduled" : "pending",
+      scheduledTime: scheduleTime || null
+    });
 
-    console.log(`📱 Attempting to post as: ${account.meta?.username}`);
+    // 🔁 COMMON POST FUNCTION
+    const postTweetNow = async () => {
+      const freshAccount = await TwitterAccount.findById(account._id);
+      const { client } = await getValidTwitterClient(freshAccount);
 
-    // Get valid client (with token refresh if needed)
-    const { client } = await getValidTwitterClient(account);
+      const tweet = await client.v2.tweet({ text: content });
 
-    // Post tweet
-    const tweet = await client.v2.tweet(content);
-    const tweetId = tweet.data.id;
-    const tweetUrl = `https://twitter.com/${account.meta?.username}/status/${tweetId}`;
+      const tweetUrl = `https://twitter.com/${freshAccount.meta?.username}/status/${tweet.data.id}`;
 
-    console.log(`✅ Tweet posted! ID: ${tweetId}, URL: ${tweetUrl}`);
-
-    // Save to posts database
-    try {
-      const newPost = new Post({
-        user: account.user,
-        platform: "twitter",
-        providerId: tweetId,
-        content: content,
+      await Post.findByIdAndUpdate(post._id, {
+        providerId: tweet.data.id,
         postUrl: tweetUrl,
-        postedAt: new Date(),
         status: "posted",
-        accountInfo: {
-          username: account.meta?.username,
-          name: account.meta?.name,
-          platformId: account.providerId
+        postedAt: new Date()
+      });
+
+      return tweetUrl;
+    };
+
+    // ⏰ SCHEDULED POST
+    if (scheduleTime) {
+      const runAt = new Date(scheduleTime);
+      if (runAt <= new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: "Schedule time must be future"
+        });
+      }
+
+      schedule.scheduleJob(runAt, async () => {
+        try {
+          await postTweetNow();
+        } catch (err) {
+          await Post.findByIdAndUpdate(post._id, {
+            status: "failed",
+            error: err.message
+          });
         }
       });
-      await newPost.save();
-      console.log("✅ Tweet saved to DB");
-    } catch (dbError) {
-      console.error("⚠️ DB Save Error (tweet still posted):", dbError.message);
+
+      return res.json({
+        success: true,
+        message: "Tweet scheduled successfully",
+        postId: post._id
+      });
     }
+
+    // 🚀 IMMEDIATE POST
+    const tweetUrl = await postTweetNow();
 
     res.json({
       success: true,
-      tweetId: tweetId,
-      tweetUrl: tweetUrl,
-      message: "Tweet posted successfully!",
-      username: account.meta?.username
+      message: "Tweet posted successfully",
+      postUrl: tweetUrl
     });
 
   } catch (err) {
-    console.error("❌ Post Error:", err.message);
-
-    // Check if it's an authentication error
-    if (err.code === 401 || err.message.includes("Unauthorized") || err.message.includes("authenticate")) {
-      return res.status(401).json({
-        success: false,
-        error: "Twitter authentication failed. Please reconnect your account.",
-        code: "AUTH_EXPIRED"
-      });
-    }
-
-    // Check if it's a rate limit error
-    if (err.code === 429) {
-      return res.status(429).json({
-        success: false,
-        error: "Rate limit exceeded. Please try again later.",
-        code: "RATE_LIMIT"
-      });
-    }
-
-    // Generic error
+    console.error("❌ Tweet Error:", err);
     res.status(500).json({
       success: false,
-      error: err.message || "Failed to post tweet. Please try again.",
-      code: "POST_FAILED"
+      error: err.message
     });
   }
 };
 
 // =========================
-// 4️⃣ CHECK CONNECTION (WITH VALIDATION)
+// 4️⃣ AI CAPTION GENERATION (FIXED)
+// =========================
+export const generateTwitterCaption = async (req, res) => {
+  try {
+    console.log("🤖 AI GENERATE CAPTION FOR TWITTER");
+    const { prompt } = req.body;
+    
+    if (!prompt || prompt.trim() === "") {
+      return res.status(400).json({ 
+        success: false,
+        error: "Prompt is required" 
+      });
+    }
+
+    // If no API key, provide fallback
+    if (!process.env.OPENROUTER_KEY) {
+      console.warn("⚠️ OPENROUTER_KEY not set, using fallback");
+      const fallbackCaption = `${prompt} - Sharing my thoughts! #${prompt.replace(/\s+/g, '').substring(0, 10)}`;
+      return res.json({ 
+        success: true,
+        text: fallbackCaption
+      });
+    }
+
+    const apiRes = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: `Create a catchy Twitter tweet (max 280 characters) about: "${prompt}". Include relevant hashtags.`
+          }
+        ],
+        max_tokens: 100
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": FRONTEND_URL,
+          "X-Title": "Automated Posting App"
+        },
+        timeout: 30000
+      }
+    );
+
+    const caption = apiRes.data.choices[0]?.message?.content || "";
+    console.log("✅ AI caption generated:", caption.substring(0, 50) + "...");
+    
+    res.json({ 
+      success: true,
+      text: caption.trim() 
+    });
+    
+  } catch (err) {
+    console.error("❌ AI Generation Error:", err.message);
+    
+    // Always return a response even if AI fails
+    const fallbackCaption = `${req.body.prompt || "Topic"} - Sharing my perspective! #Thoughts`;
+    res.json({ 
+      success: true,
+      text: fallbackCaption,
+      note: "AI service temporary unavailable, using fallback"
+    });
+  }
+};
+
+// =========================
+// 5️⃣ GET TWITTER POSTS
+// =========================
+export const getTwitterPosts = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: "userId required"
+      });
+    }
+
+    const posts = await Post.find({
+      user: userId,
+      platform: "twitter"
+    })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({
+      success: true,
+      posts: posts,
+      count: posts.length
+    });
+
+  } catch (err) {
+    console.error("Get Posts Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
+// =========================
+// 6️⃣ DELETE SCHEDULED TWEET
+// =========================
+export const deleteScheduledTweet = async (req, res) => {
+  try {
+    const { postId, userId } = req.body;
+    
+    if (!postId || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: "postId and userId required"
+      });
+    }
+    
+    const post = await Post.findOne({
+      _id: postId,
+      user: userId,
+      platform: "twitter"
+    });
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: "Post not found"
+      });
+    }
+    
+    if (post.status !== "scheduled") {
+      return res.status(400).json({
+        success: false,
+        error: "Only scheduled tweets can be deleted"
+      });
+    }
+    
+    // Delete from database
+    await Post.findByIdAndDelete(postId);
+    
+    res.json({
+      success: true,
+      message: "Scheduled tweet deleted successfully"
+    });
+    
+  } catch (err) {
+    console.error("Delete Error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+};
+
+// =========================
+// 7️⃣ CHECK CONNECTION
 // =========================
 export const checkTwitterConnection = async (req, res) => {
   try {
@@ -351,16 +504,17 @@ export const checkTwitterConnection = async (req, res) => {
     if (!account) {
       return res.json({
         success: true,
-        connected: false
+        connected: false,
+        message: "Twitter account not connected"
       });
     }
 
-    // Test if token is still valid
+    // Try to validate the token
     let isValid = false;
     let error = null;
 
     try {
-      const { client } = await getValidTwitterClient(account);
+      const client = new TwitterApi(account.accessToken);
       await client.v2.me();
       isValid = true;
     } catch (tokenError) {
@@ -391,7 +545,7 @@ export const checkTwitterConnection = async (req, res) => {
 };
 
 // =========================
-// 5️⃣ VERIFY ANDROID SESSION
+// 8️⃣ VERIFY ANDROID SESSION
 // =========================
 export const verifyAndroidSession = async (req, res) => {
   try {
@@ -446,46 +600,8 @@ export const verifyAndroidSession = async (req, res) => {
   }
 };
 
-
-
 // =========================
-// 7️⃣ GET POSTS
-// =========================
-export const getTwitterPosts = async (req, res) => {
-  try {
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId required"
-      });
-    }
-
-    const posts = await Post.find({
-      user: userId,
-      platform: "twitter"
-    })
-      .sort({ postedAt: -1 })
-      .limit(20);
-
-    res.json({
-      success: true,
-      posts: posts,
-      count: posts.length
-    });
-
-  } catch (err) {
-    console.error("Get Posts Error:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
-};
-
-//=========================
-// 6️⃣ DISCONNECT (FIXED)
+// 9️⃣ DISCONNECT
 // =========================
 export const disconnectTwitter = async (req, res) => {
   try {
@@ -521,12 +637,9 @@ export const disconnectTwitter = async (req, res) => {
     });
   }
 };
- 
+
 // =========================
-// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY) - FIXED
-// =========================
-// =========================
-// ✅ GET TWITTER PROFILE (POSTMAN FRIENDLY) - UPDATED WITH PROFILE PICTURE & TOKEN
+// 🔟 GET TWITTER PROFILE
 // =========================
 export const getTwitterProfile = async (req, res) => {
   try {
@@ -542,7 +655,7 @@ export const getTwitterProfile = async (req, res) => {
       });
     }
  
-    // 1. Find account in database
+    // Find account in database
     const account = await TwitterAccount.findOne({
       user: userId,
       platform: "twitter"
@@ -567,73 +680,62 @@ export const getTwitterProfile = async (req, res) => {
       });
     }
  
-    // 2. Fetch fresh user details from Twitter API
-    let profileImageUrl = null;
+    // Try to get fresh data
+    let profileImageUrl = account.meta?.profileImageUrl || null;
     let freshUserData = null;
     let tokenStatus = "unknown";
  
     try {
-      // Initialize Twitter client with the user's access token
       const userClient = new TwitterApi(account.accessToken);
-      // Request specific user fields including profile_image_url[citation:4]
       const user = await userClient.v2.me({
         "user.fields": ["profile_image_url", "username", "name", "id"]
       });
       freshUserData = user.data;
-      profileImageUrl = user.data.profile_image_url || null;
+      profileImageUrl = user.data.profile_image_url || profileImageUrl;
       tokenStatus = "valid";
       console.log("✅ Fresh Twitter data fetched for:", user.data.username);
  
     } catch (apiError) {
       console.error("❌ Error fetching from Twitter API:", apiError.message);
-      // Use stored data if API call fails
       if (account.meta) {
         freshUserData = account.meta;
-        profileImageUrl = account.meta.profileImageUrl || null;
+        profileImageUrl = account.meta.profileImageUrl || profileImageUrl;
       }
       tokenStatus = "invalid_or_expired";
     }
  
-    // 3. Prepare profile image URLs in different sizes[citation:4]
+    // Prepare profile image URLs
     let profileImageUrls = {};
     if (profileImageUrl) {
-      // Remove the '_normal' suffix to get the original image
       const baseUrl = profileImageUrl.replace('_normal', '');
       profileImageUrls = {
-        normal: profileImageUrl,           // 48x48
-        bigger: `${baseUrl}_bigger`,       // 73x73
-        mini: `${baseUrl}_mini`,           // 24x24
-        original: baseUrl                  // Original size
+        normal: profileImageUrl,
+        bigger: `${baseUrl}_bigger`,
+        mini: `${baseUrl}_mini`,
+        original: baseUrl
       };
     }
  
-    // ✅ SUCCESS RESPONSE
     return res.json({
       success: true,
       connected: true,
       message: "Twitter account is connected",
       tokenDetails: {
         status: tokenStatus,
-        // Include first few characters of token for debugging (not full for security)
         hasAccessToken: !!account.accessToken,
-        accessTokenPreview: account.accessToken ? 
-          `${account.accessToken.substring(0, 15)}...` : null,
         hasRefreshToken: !!account.refreshToken,
         tokenExpiresAt: account.tokenExpiresAt,
-        scopes: account.scopes || []
+        lastRefresh: account.lastTokenRefresh
       },
       profile: {
         userId: account.user,
         twitterId: freshUserData?.id || account.meta?.twitterId || account.providerId,
         username: freshUserData?.username || account.meta?.username,
         name: freshUserData?.name || account.meta?.name,
-        // 🖼️ PROFILE PICTURE DATA
         profileImageUrl: profileImageUrl,
         profileImageUrls: profileImageUrls,
         connectedAt: account.createdAt,
-        updatedAt: account.updatedAt,
-        // Store the fresh API data for reference
-        apiData: freshUserData
+        updatedAt: account.updatedAt
       }
     });
  
@@ -648,69 +750,12 @@ export const getTwitterProfile = async (req, res) => {
 };
 
 // =========================
-// 8️⃣ GET TWITTER ACCOUNT (for /api/twitter/account/:userId route)
-// =========================
-export const getTwitterAccount = async (req, res) => {
-  try {
-    const { userId } = req.params;
-   
-    console.log("🔍 Get Account request for userId:", userId);
- 
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId parameter required in URL (e.g., /account/123)"
-      });
-    }
- 
-    const account = await TwitterAccount.findOne({
-      user: userId,
-      platform: "twitter"
-    });
- 
-    if (!account) {
-      console.log("❌ Account not found for userId:", userId);
-      return res.status(200).json({
-        success: true,
-        connected: false,
-        error: "Twitter account not connected",
-        account: null
-      });
-    }
- 
-    console.log("✅ Account found:", account.meta?.username);
-   
-    res.json({
-      success: true,
-      connected: true,
-      account: {
-        userId: account.user,
-        twitterId: account.providerId || account.meta?.twitterId,
-        username: account.meta?.username,
-        name: account.meta?.name,
-        connectedAt: account.createdAt,
-        updatedAt: account.updatedAt,
-        hasAccessToken: !!account.accessToken,
-        hasRefreshToken: !!account.refreshToken
-      }
-    });
- 
-  } catch (err) {
-    console.error("❌ Get Account Error:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
-  }
-};
-
-// =========================
-// UPDATED HELPER FUNCTIONS
+// HELPER FUNCTIONS
 // =========================
 const handleRedirect = (res, platform, userData, userId, sessionId, accessToken) => {
   console.log(`🔄 Redirecting: ${platform.toUpperCase()} flow`);
 
-  // 🎯 ANDROID: Send Direct Deep Link Redirect
+  // ANDROID: Send Direct Deep Link Redirect
   if (platform === "android" && sessionId) {
     const deepLink =
       `com.wingspan.aimediahub://twitter-callback` +
@@ -718,18 +763,15 @@ const handleRedirect = (res, platform, userData, userId, sessionId, accessToken)
       `&status=success` +
       `&username=${encodeURIComponent(userData.username)}` +
       `&twitter_id=${userData.id}` +
-      `&user_id=${userId}` +
-      `&access_token=${encodeURIComponent(accessToken)}`;
+      `&user_id=${userId}`;
 
     console.log(`🔗 Android Deep Link Created: ${deepLink}`);
-
-    // Direct redirect to deep link
     return res.redirect(deepLink);
   }
 
-  // 🎯 WEB: Normal Redirect
+  // WEB: Normal Redirect
   const webRedirect =
-    `https://automatedpostingsfrontend.onrender.com/twitter-manager` +
+    "https://automatedpostingsfrontend.onrender.com/twitter-manager" + 
     `?twitter=connected` +
     `&username=${encodeURIComponent(userData.username)}` +
     `&user_id=${userId}`;
@@ -743,7 +785,6 @@ const sendErrorResponse = (res, error, platform) => {
 
   if (platform === "android") {
     const errorLink = `com.wingspan.aimediahub://twitter-callback?status=error&error=${encodeURIComponent(error)}`;
-    // Direct redirect to error deep link
     return res.redirect(errorLink);
   }
 

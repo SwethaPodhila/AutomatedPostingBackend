@@ -18,18 +18,20 @@ import automationRoutes from "./routes/automation.routes.js";
 // server.js
 import "./cron/manualDailyCron.js";
 
+
 import {
   twitterAuth,
   twitterCallback,
   checkTwitterConnection,
-  postToTwitter,
+  publishTweet,
   disconnectTwitter,
   verifyAndroidSession,
-  getTwitterProfile // ✅ ADDED
+  getTwitterProfile,
+  generateTwitterCaption,
+  getTwitterPosts,
+  deleteScheduledTweet
 } from "./controllers/twitter.controller.js";
 
-
-// Method 1: Try named imports (most common)
 import {
   linkedinAuth,
   linkedinCallback,
@@ -38,7 +40,7 @@ import {
   disconnectLinkedIn,
   verifyAndroidSessionLinkedin,
   getLinkedInProfile,
-  getLinkedInPosts // ✅ ADDED NEW IMPORT
+  getLinkedInPosts
 } from "./controllers/linkedin.controller.js";
 
 dotenv.config();
@@ -74,6 +76,13 @@ app.use("/api/twitter", twitterRoutes);
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
+
+
+// =========================
+// MIDDLEWARE
+// =========================
+app.use(express.json()); // For parsing application/json
+app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
 
 // publish & metrics
@@ -120,29 +129,32 @@ app.use(
 );
 
 // =========================
-//  📌 TWITTER ROUTES
+// DIRECT TWITTER ROUTES
 // =========================
-app.get("/auth/twitter", twitterAuth); // ONLY ONE TIME
+app.post("/api/twitter/ai-generate", generateTwitterCaption);
+app.post("/api/twitter/publish", upload.single("media"), publishTweet);
+app.get("/auth/twitter", twitterAuth);
 app.get("/auth/twitter/callback", twitterCallback);
 app.get("/api/twitter/check", checkTwitterConnection);
-app.post("/api/twitter/post", postToTwitter);
+app.post("/api/twitter/post", upload.single("media"), publishTweet);
 app.post("/api/twitter/disconnect", disconnectTwitter);
 app.get("/api/twitter/verify-session", verifyAndroidSession);
 app.get("/api/twitter/profile", getTwitterProfile);
-
+app.get("/api/twitter/posts", getTwitterPosts);
+app.delete("/api/twitter/post/delete", deleteScheduledTweet);
 
 // =========================
-//  📌 LINKEDIN ROUTES
+// LINKEDIN ROUTES
 // =========================
 app.get("/auth/linkedin", linkedinAuth);
 app.get("/auth/linkedin/callback", linkedinCallback);
 app.get("/api/linkedin/check", checkLinkedInConnection);
-app.post("/api/linkedin/post", postToLinkedIn);
-app.get("/auth/linkedin/account/:userId", checkLinkedInConnection);
+app.post("/api/linkedin/post", upload.single("media"), postToLinkedIn);
 app.post("/api/linkedin/disconnect", disconnectLinkedIn);
 app.get("/api/linkedin/posts", getLinkedInPosts);
 app.get("/api/linkedin/verify-session", verifyAndroidSessionLinkedin);
 app.get("/api/linkedin/profile", getLinkedInProfile);
+
 // =========================
 //  📌 HEALTH
 // =========================

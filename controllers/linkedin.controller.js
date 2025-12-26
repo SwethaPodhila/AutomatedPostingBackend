@@ -1,15 +1,19 @@
-// controllers/linkedin.controller.js - UPDATED WITH ANDROID DEEP LINK
 import dotenv from "dotenv";
 import axios from "axios";
 import TwitterAccount from "../models/TwitterAccount.js";
 import Post from "../models/Post.js";
+import schedule from "node-schedule";
+import fs from "fs";
+
+// ✅ ADD THIS LINE HERE (Cloudinary import - CORRECTED)
+import { uploadImageToCloud } from "../imageUploader.js"; // 👈 IMPORT FROM CORRECT PATH
 
 dotenv.config();
 
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID;
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET;
 const BACKEND_URL = process.env.BACKEND_URL || "https://automatedpostingbackend.onrender.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com/";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com";
 
 // Android Deep Link Configuration
 const ANDROID_DEEP_LINK = "com.wingspan.aimediahub://linkedin-callback";
@@ -66,10 +70,9 @@ export const linkedinAuth = async (req, res) => {
 
       console.log("✅ Session saved successfully");
 
-      // Handle different platforms
       if (platform === 'android') {
         console.log("📱 Android platform detected - redirecting to LinkedIn");
-        return res.redirect(authUrl); // <- DIRECT REDIRECT TO LINKEDIN
+        return res.redirect(authUrl);
       } else {
         // For web, redirect directly
         console.log("🔄 Redirecting to LinkedIn OAuth...");
@@ -243,13 +246,10 @@ export const linkedinCallback = async (req, res) => {
 export const checkLinkedInConnection = async (req, res) => {
   try {
     const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: "userId parameter is required"
-      });
-    }
+    if (!userId) return res.status(400).json({
+      success: false,
+      error: "userId required"
+    });
 
     const account = await TwitterAccount.findOne({
       user: userId,
@@ -259,16 +259,36 @@ export const checkLinkedInConnection = async (req, res) => {
     if (!account) {
       return res.json({
         success: true,
-        connected: false
+        connected: false,
+        message: "LinkedIn account not connected"
       });
     }
 
-    const isTokenValid = account.tokenExpiresAt > new Date();
+    // Try to validate the token
+    let isValid = false;
+    let error = null;
+
+    try {
+      const response = await axios.get(
+        'https://api.linkedin.com/v2/userinfo',
+        {
+          headers: {
+            'Authorization': `Bearer ${account.accessToken}`,
+            'cache-control': 'no-cache'
+          }
+        }
+      );
+      isValid = true;
+    } catch (tokenError) {
+      error = tokenError.message;
+      isValid = false;
+    }
 
     res.json({
       success: true,
-      connected: isTokenValid,
-      platform: account.loginPlatform || 'web',
+      connected: isValid,
+      isValid: isValid,
+      error: error,
       account: {
         name: account.meta?.name,
         firstName: account.meta?.firstName,
@@ -279,13 +299,12 @@ export const checkLinkedInConnection = async (req, res) => {
         profileImage: account.meta?.profileImage,
         linkedinId: account.meta?.linkedinId,
         connectedAt: account.createdAt,
-        tokenExpiresAt: account.tokenExpiresAt,
-        loginPlatform: account.loginPlatform
+        needsReconnect: !isValid
       }
     });
 
   } catch (err) {
-    console.error("Check LinkedIn Error:", err);
+    console.error("Check Error:", err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -294,20 +313,33 @@ export const checkLinkedInConnection = async (req, res) => {
 };
 
 // =========================
-// 4️⃣ Post to LinkedIn (UPDATED)
+// 4️⃣ POST TO LINKEDIN (UPDATED WITH CLOUDINARY FOR IMAGES & VIDEOS)
 // =========================
 export const postToLinkedIn = async (req, res) => {
   try {
-    const { userId, content, visibility = "PUBLIC" } = req.body;
+    console.log("🚀 LinkedIn Post Request Received");
+    console.log("📝 Post data received");
+    console.log("File:", req.file);
+    console.log("Body:", req.body);
 
-    if (!userId || !content) {
+    const { userId, content, scheduleTime, visibility = "PUBLIC" } = req.body;
+    const file = req.file;
+
+    if (!userId) {
       return res.status(400).json({
         success: false,
-        error: "userId and content are required"
+        error: "userId required"
       });
     }
 
-    if (content.length > 3000) {
+    if (!content && !file) {
+      return res.status(400).json({
+        success: false,
+        error: "Content or media is required"
+      });
+    }
+
+    if (content && content.length > 3000) {
       return res.status(400).json({
         success: false,
         error: "Post cannot exceed 3000 characters"
@@ -333,16 +365,18 @@ export const postToLinkedIn = async (req, res) => {
       });
     }
 
-    // Prepare LinkedIn post
+    console.log(`📱 Attempting to post as: ${account.meta?.name}`);
+
+    // Prepare LinkedIn post payload
     const postPayload = {
       author: `urn:li:person:${account.providerId}`,
       lifecycleState: "PUBLISHED",
       specificContent: {
         "com.linkedin.ugc.ShareContent": {
           shareCommentary: {
-            text: content
+            text: content || ""
           },
-          shareMediaCategory: "NONE"
+          shareMediaCategory: file ? "IMAGE" : "NONE"
         }
       },
       visibility: {
@@ -350,69 +384,425 @@ export const postToLinkedIn = async (req, res) => {
       }
     };
 
-    const postResponse = await axios.post(
-      'https://api.linkedin.com/v2/ugcPosts',
-      postPayload,
+    let cloudinaryResult = null;
+    let mediaAsset = null;
+
+    // Handle media upload if file exists (using Cloudinary)
+    if (file) {
+      try {
+        console.log(`📸 Processing media: ${file.mimetype}, ${file.originalname}`);
+        
+        // Determine if it's a video
+        const isVideo = file.mimetype.startsWith('video/');
+        const isImage = file.mimetype.startsWith('image/');
+        
+        if (!isImage && !isVideo) {
+          return res.status(400).json({
+            success: false,
+            error: "Only image and video files are allowed"
+          });
+        }
+
+        // Check file size
+        const maxSize = isVideo ? 100 * 1024 * 1024 : 5 * 1024 * 1024; // 100MB for video, 5MB for images
+        if (file.size > maxSize) {
+          return res.status(400).json({
+            success: false,
+            error: `File too large. Max size: ${isVideo ? '100MB for video' : '5MB for images'}`
+          });
+        }
+
+        // Upload to Cloudinary
+        console.log("☁️ Uploading to Cloudinary...");
+        
+        const resourceType = isVideo ? 'video' : 'image';
+        
+        // ✅ FIXED: CORRECT FUNCTION CALL
+        cloudinaryResult = await uploadImageToCloud(file.buffer, {
+          mimetype: file.mimetype,
+          filename: file.originalname,
+          resource_type: resourceType
+        });
+        
+        console.log(`✅ Media uploaded to Cloudinary: ${cloudinaryResult.url}`);
+        console.log(`📊 Cloudinary Info:`, {
+          public_id: cloudinaryResult.publicId,
+          format: cloudinaryResult.format,
+          resource_type: resourceType,
+          bytes: file.size
+        });
+
+        // For LinkedIn, we need to upload the media file directly to LinkedIn API
+        // First, register the upload with LinkedIn
+        console.log("📤 Registering media upload with LinkedIn...");
+        
+        const registerResponse = await axios.post(
+          'https://api.linkedin.com/v2/assets?action=registerUpload',
+          {
+            registerUploadRequest: {
+              recipes: isVideo 
+                ? ["urn:li:digitalmediaRecipe:feedshare-video"] 
+                : ["urn:li:digitalmediaRecipe:feedshare-image"],
+              owner: `urn:li:person:${account.providerId}`,
+              serviceRelationships: [{
+                relationshipType: "OWNER",
+                identifier: "urn:li:userGeneratedContent"
+              }]
+            }
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${account.accessToken}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0'
+            }
+          }
+        );
+
+        const uploadUrl = registerResponse.data.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
+        mediaAsset = registerResponse.data.value.asset;
+
+        console.log(`📤 Upload URL received: ${uploadUrl}`);
+        console.log(`🎯 Media Asset: ${mediaAsset}`);
+
+        // Download from Cloudinary and upload to LinkedIn
+        console.log("🔗 Downloading from Cloudinary for LinkedIn upload...");
+        
+        // Get the media file from Cloudinary
+        const mediaResponse = await axios.get(cloudinaryResult.url, {
+          responseType: 'arraybuffer'
+        });
+
+        const fileBuffer = Buffer.from(mediaResponse.data, 'binary');
+
+        // Upload to LinkedIn
+        console.log("📤 Uploading to LinkedIn...");
+        await axios.put(uploadUrl, fileBuffer, {
+          headers: {
+            'Authorization': `Bearer ${account.accessToken}`,
+            'Content-Type': file.mimetype,
+            'Content-Length': fileBuffer.length
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity
+        });
+
+        console.log(`✅ Media uploaded to LinkedIn! Asset: ${mediaAsset}`);
+
+        // Add media to post payload
+        postPayload.specificContent["com.linkedin.ugc.ShareContent"].media = [
+          {
+            status: "READY",
+            description: {
+              text: content || (isVideo ? "Shared video" : "Shared image")
+            },
+            media: mediaAsset,
+            title: {
+              text: file.originalname || (isVideo ? "Video" : "Image")
+            }
+          }
+        ];
+
+        // Update media category for videos
+        if (isVideo) {
+          postPayload.specificContent["com.linkedin.ugc.ShareContent"].shareMediaCategory = "VIDEO";
+        }
+
+      } catch (mediaError) {
+        console.error("❌ Media processing error:", mediaError.message);
+        console.error("❌ Error details:", mediaError.response?.data);
+        
+        return res.status(500).json({
+          success: false,
+          error: `Media upload failed: ${mediaError.message}`,
+          details: mediaError.response?.data
+        });
+      }
+    }
+
+    // Save post to database (with Cloudinary URL)
+    const postData = {
+      user: userId,
+      platform: "linkedin",
+      content: content || "",
+      mediaType: file ? (file.mimetype.startsWith('video') ? 'video' : 'image') : null,
+      mediaUrl: cloudinaryResult ? cloudinaryResult.url : null, // Store Cloudinary URL
+      cloudinaryPublicId: cloudinaryResult ? cloudinaryResult.publicId : null,
+      status: scheduleTime ? "scheduled" : "pending",
+      scheduledTime: scheduleTime || null,
+      accountInfo: {
+        username: account.meta?.username,
+        name: account.meta?.name,
+        firstName: account.meta?.firstName,
+        lastName: account.meta?.lastName,
+        platformId: account.providerId
+      }
+    };
+    
+    const newPost = new Post(postData);
+    await newPost.save();
+    console.log("✅ Post saved to DB with ID:", newPost._id);
+
+    // Function to post to LinkedIn API
+    const postToLinkedInAPI = async (accessToken) => {
+      try {
+        console.log("🚀 Posting to LinkedIn API...");
+        console.log("📦 Post payload:", JSON.stringify(postPayload, null, 2));
+        
+        const response = await axios.post(
+          'https://api.linkedin.com/v2/ugcPosts',
+          postPayload,
+          {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+              'X-Restli-Protocol-Version': '2.0.0'
+            },
+            timeout: 60000 // 60 seconds timeout for video uploads
+          }
+        );
+
+        const postId = response.data.id;
+        const postUrl = `https://www.linkedin.com/feed/update/${postId}`;
+        
+        console.log(`✅ LinkedIn post created! ID: ${postId}, URL: ${postUrl}`);
+
+        // Update post in database
+        await Post.findByIdAndUpdate(newPost._id, {
+          providerId: postId,
+          postUrl: postUrl,
+          status: "posted",
+          postedAt: new Date(),
+          linkedinAssetId: mediaAsset // Store LinkedIn asset ID
+        });
+
+        console.log("✅ DB updated with post info");
+        
+        return { postId, postUrl };
+
+      } catch (apiError) {
+        console.error("❌ LinkedIn API Error:", apiError.message);
+        console.error("❌ Error details:", apiError.response?.data);
+        
+        // Update post status to failed
+        await Post.findByIdAndUpdate(newPost._id, {
+          status: "failed",
+          error: apiError.message || "Failed to post to LinkedIn"
+        });
+        
+        throw apiError;
+      }
+    };
+
+    // Handle scheduling
+    if (scheduleTime) {
+      console.log(`⏰ Scheduling post for: ${scheduleTime}`);
+      const scheduleDate = new Date(scheduleTime);
+      
+      if (scheduleDate <= new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: "Schedule time must be in the future"
+        });
+      }
+      
+      // Schedule the post
+      const job = schedule.scheduleJob(scheduleDate, async () => {
+        try {
+          console.log(`⏰ Scheduled job triggered for post: ${newPost._id}`);
+          
+          // Get fresh account for scheduled job
+          const freshAccount = await TwitterAccount.findById(account._id);
+          if (!freshAccount) {
+            console.error("❌ Account not found for scheduled post");
+            await Post.findByIdAndUpdate(newPost._id, {
+              status: "failed",
+              error: "LinkedIn account not found"
+            });
+            return;
+          }
+          
+          // Post to LinkedIn
+          await postToLinkedInAPI(freshAccount.accessToken);
+          
+        } catch (error) {
+          console.error("❌ Scheduled post failed:", error);
+          await Post.findByIdAndUpdate(newPost._id, {
+            status: "failed",
+            error: error.message || "Failed to post scheduled content"
+          });
+        }
+      });
+      
+      // Store job ID in database
+      await Post.findByIdAndUpdate(newPost._id, {
+        scheduleJobId: job.name
+      });
+      
+      return res.json({
+        success: true,
+        message: "Post scheduled successfully",
+        postId: newPost._id,
+        scheduledTime: scheduleTime,
+        type: "scheduled",
+        cloudinaryUrl: cloudinaryResult?.url
+      });
+    }
+    
+    // Immediate posting
+    const result = await postToLinkedInAPI(account.accessToken);
+    
+    res.json({
+      success: true,
+      postId: result.postId,
+      postUrl: result.postUrl,
+      message: "Post published successfully!",
+      name: account.meta?.name,
+      type: "posted",
+      cloudinaryUrl: cloudinaryResult?.url,
+      mediaType: file ? (file.mimetype.startsWith('video') ? 'video' : 'image') : null
+    });
+    
+  } catch (err) {
+    console.error("❌ Post Error:", err.message);
+    console.error("❌ Error stack:", err.stack);
+    
+    res.status(500).json({
+      success: false,
+      error: err.message || "Failed to post to LinkedIn. Please try again.",
+      details: err.response?.data
+    });
+  }
+};
+
+// =========================
+// 10️⃣ AI CAPTION GENERATION FOR LINKEDIN
+// =========================
+export const generateLinkedInCaption = async (req, res) => {
+  try {
+    console.log("🤖 AI GENERATE CAPTION FOR LINKEDIN");
+    const { prompt } = req.body;
+    
+    if (!prompt || prompt.trim() === "") {
+      return res.status(400).json({ 
+        success: false,
+        error: "Prompt is required" 
+      });
+    }
+
+    // If no API key, provide fallback
+    if (!process.env.OPENROUTER_KEY) {
+      console.warn("⚠️ OPENROUTER_KEY not set, using fallback");
+      const fallbackCaption = `${prompt} - Sharing professional insights! #${prompt.replace(/\s+/g, '').substring(0, 10)}`;
+      return res.json({ 
+        success: true,
+        text: fallbackCaption
+      });
+    }
+
+    const apiRes = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: `Create a professional LinkedIn post (max 3000 characters) about: "${prompt}". Make it suitable for professional networking. Include relevant hashtags.`
+          }
+        ],
+        max_tokens: 200
+      },
       {
         headers: {
-          'Authorization': `Bearer ${account.accessToken}`,
-          'Content-Type': 'application/json',
-          'X-Restli-Protocol-Version': '2.0.0'
-        }
+          Authorization: `Bearer ${process.env.OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": FRONTEND_URL,
+          "X-Title": "Automated Posting App"
+        },
+        timeout: 30000
       }
     );
 
-    const postId = postResponse.data.id;
-    const postUrl = `https://www.linkedin.com/feed/update/${postId}`;
+    const caption = apiRes.data.choices[0]?.message?.content || "";
+    console.log("✅ AI caption generated:", caption.substring(0, 50) + "...");
+    
+    res.json({ 
+      success: true,
+      text: caption.trim() 
+    });
+    
+  } catch (err) {
+    console.error("❌ AI Generation Error:", err.message);
+    
+    // Always return a response even if AI fails
+    const fallbackCaption = `${req.body.prompt || "Topic"} - Sharing professional insights and perspectives! #ProfessionalDevelopment`;
+    res.json({ 
+      success: true,
+      text: fallbackCaption,
+      note: "AI service temporary unavailable, using fallback"
+    });
+  }
+};
 
-    // Save post to database
-    try {
-      const newPost = new Post({
-        user: userId,
-        platform: "linkedin",
-        providerId: postId,
-        content: content,
-        postUrl: postUrl,
-        postedAt: new Date(),
-        status: "posted",
-        accountInfo: {
-          username: account.meta?.username || "",
-          name: account.meta?.name || "",
-          profileImage: account.meta?.profileImage || "",
-          platformId: account.providerId,
-          loginPlatform: account.loginPlatform || 'web'
-        }
+// =========================
+// 11️⃣ DELETE SCHEDULED LINKEDIN POST
+// =========================
+export const deleteScheduledLinkedInPost = async (req, res) => {
+  try {
+    const { postId, userId } = req.body;
+    
+    if (!postId || !userId) {
+      return res.status(400).json({
+        success: false,
+        error: "postId and userId required"
       });
-
-      await newPost.save();
-      console.log("✅ LinkedIn post saved to database:", postId);
-
-    } catch (dbError) {
-      console.error("❌ Error saving post to database:", dbError.message);
     }
-
+    
+    const post = await Post.findOne({
+      _id: postId,
+      user: userId,
+      platform: "linkedin"
+    });
+    
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: "Post not found"
+      });
+    }
+    
+    if (post.status !== "scheduled") {
+      return res.status(400).json({
+        success: false,
+        error: "Only scheduled posts can be deleted"
+      });
+    }
+    
+    // If there's a Cloudinary media, optionally delete it
+    if (post.cloudinaryPublicId) {
+      try {
+        // Import cloudinary for deletion
+        const cloudinary = (await import('cloudinary')).v2;
+        await cloudinary.uploader.destroy(post.cloudinaryPublicId);
+        console.log(`🗑️ Deleted Cloudinary media: ${post.cloudinaryPublicId}`);
+      } catch (cloudinaryError) {
+        console.error("❌ Error deleting Cloudinary media:", cloudinaryError.message);
+      }
+    }
+    
+    // Delete from database
+    await Post.findByIdAndDelete(postId);
+    
     res.json({
       success: true,
-      postId: postId,
-      postUrl: postUrl,
-      message: "Successfully posted to LinkedIn and saved to database!"
+      message: "Scheduled post deleted successfully"
     });
-
+    
   } catch (err) {
-    console.error("Post to LinkedIn Error:", err.message);
-    console.error("Post Error Details:", err.response?.data);
-
-    let errorMessage = err.message;
-    if (err.response?.data?.message) {
-      errorMessage = err.response.data.message;
-    } else if (err.response?.data?.error_description) {
-      errorMessage = err.response.data.error_description;
-    }
-
+    console.error("Delete Error:", err);
     res.status(500).json({
       success: false,
-      error: errorMessage,
-      details: err.response?.data
+      error: err.message
     });
   }
 };
@@ -668,7 +1058,7 @@ export const getLinkedInPosts = async (req, res) => {
     if (!userId) {
       return res.status(400).json({
         success: false,
-        error: "userId parameter is required"
+        error: "userId required"
       });
     }
 
@@ -676,7 +1066,7 @@ export const getLinkedInPosts = async (req, res) => {
       user: userId,
       platform: "linkedin"
     })
-      .sort({ postedAt: -1 })
+      .sort({ createdAt: -1 })
       .limit(50);
 
     res.json({
@@ -686,7 +1076,7 @@ export const getLinkedInPosts = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Get LinkedIn Posts Error:", err);
+    console.error("Get Posts Error:", err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -700,47 +1090,48 @@ export const getLinkedInPosts = async (req, res) => {
 export const getLinkedInProfile = async (req, res) => {
   try {
     const { userId } = req.query;
-
+ 
+    console.log("🔍 LinkedIn Profile request received, userId:", userId);
+ 
     if (!userId) {
       return res.status(400).json({
         success: false,
-        error: "userId parameter is required"
+        message: "userId query parameter required (e.g., ?userId=123)",
+        connected: false
       });
     }
-
+ 
+    // Find account in database
     const account = await TwitterAccount.findOne({
       user: userId,
-      platform: "linkedin",
+      platform: "linkedin"
     });
-
+ 
     if (!account) {
-      return res.status(404).json({
-        success: false,
-        error: "LinkedIn account not found for this user"
-      });
-    }
-
-    // Check if token is valid
-    const isTokenValid = account.tokenExpiresAt > new Date();
-
-    if (!isTokenValid) {
-      return res.json({
+      console.log("❌ Account not found for userId:", userId);
+      return res.status(200).json({
         success: true,
         connected: false,
-        message: "Token expired. Please reconnect your LinkedIn account.",
-        profile: {
-          name: account.meta?.name,
-          email: account.meta?.email,
-          profileImage: account.meta?.profileImage,
-          linkedinId: account.meta?.linkedinId,
-          headline: account.meta?.headline
-        }
+        message: "LinkedIn account not connected",
+        profile: null
       });
     }
-
-    // Try to fetch fresh profile data from LinkedIn
+ 
+    if (!account.accessToken) {
+      return res.status(200).json({
+        success: true,
+        connected: false,
+        message: "Access token missing for this account",
+        profile: null
+      });
+    }
+ 
+    // Try to get fresh data
+    let freshProfileData = null;
+    let tokenStatus = "unknown";
+ 
     try {
-      const profileResponse = await axios.get(
+      const response = await axios.get(
         'https://api.linkedin.com/v2/userinfo',
         {
           headers: {
@@ -749,70 +1140,45 @@ export const getLinkedInProfile = async (req, res) => {
           }
         }
       );
-
-      const freshProfile = profileResponse.data;
-
-      // Update database with fresh data
-      await TwitterAccount.findOneAndUpdate(
-        { _id: account._id },
-        {
-          'meta.name': freshProfile.name || account.meta?.name,
-          'meta.firstName': freshProfile.given_name || account.meta?.firstName,
-          'meta.lastName': freshProfile.family_name || account.meta?.lastName,
-          'meta.email': freshProfile.email || account.meta?.email,
-          'meta.profileImage': freshProfile.picture || account.meta?.profileImage,
-          'meta.headline': freshProfile.headline || account.meta?.headline
-        }
-      );
-
-      return res.json({
-        success: true,
-        connected: true,
-        profile: {
-          providerId: account.providerId,
-          accessToken: account.accessToken,
-          tokenExpiresAt: account.tokenExpiresAt,
-          loginPlatform: account.loginPlatform || 'web',
-          name: freshProfile.name,
-          firstName: freshProfile.given_name,
-          lastName: freshProfile.family_name,
-          email: freshProfile.email,
-          profileImage: freshProfile.picture,
-          linkedinId: freshProfile.sub,
-          headline: freshProfile.headline,
-          userId: userId
-        }
-      });
-
+      freshProfileData = response.data;
+      tokenStatus = "valid";
+      console.log("✅ Fresh LinkedIn data fetched for:", freshProfileData.name);
+ 
     } catch (apiError) {
-      // If API call fails, return cached profile data
-      console.error("LinkedIn API Error:", apiError.message);
-
-      return res.json({
-        success: true,
-        connected: true,
-        cached: true,
-        profile: {
-          providerId: account.providerId,
-          tokenExpiresAt: account.tokenExpiresAt,
-          loginPlatform: account.loginPlatform || 'web',
-          name: account.meta?.name,
-          firstName: account.meta?.firstName,
-          lastName: account.meta?.lastName,
-          email: account.meta?.email,
-          profileImage: account.meta?.profileImage,
-          linkedinId: account.meta?.linkedinId,
-          headline: account.meta?.headline,
-          userId: userId
-        }
-      });
+      console.error("❌ Error fetching from LinkedIn API:", apiError.message);
+      tokenStatus = "invalid_or_expired";
     }
-
+ 
+    return res.json({
+      success: true,
+      connected: true,
+      message: "LinkedIn account is connected",
+      tokenDetails: {
+        status: tokenStatus,
+        hasAccessToken: !!account.accessToken,
+        tokenExpiresAt: account.tokenExpiresAt,
+        lastRefresh: account.lastTokenRefresh
+      },
+      profile: {
+        userId: account.user,
+        linkedinId: freshProfileData?.sub || account.meta?.linkedinId || account.providerId,
+        name: freshProfileData?.name || account.meta?.name,
+        firstName: freshProfileData?.given_name || account.meta?.firstName,
+        lastName: freshProfileData?.family_name || account.meta?.lastName,
+        email: freshProfileData?.email || account.meta?.email,
+        profileImage: freshProfileData?.picture || account.meta?.profileImage || "https://cdn-icons-png.flaticon.com/512/174/174857.png",
+        headline: freshProfileData?.headline || account.meta?.headline,
+        connectedAt: account.createdAt,
+        updatedAt: account.updatedAt
+      }
+    });
+ 
   } catch (err) {
-    console.error("Get LinkedIn Profile Error:", err);
-    res.status(500).json({
+    console.error("❌ Profile Error:", err);
+    return res.status(500).json({
       success: false,
-      error: err.message
+      message: err.message,
+      connected: false
     });
   }
 };
@@ -820,7 +1186,6 @@ export const getLinkedInProfile = async (req, res) => {
 // =========================
 // 11️⃣ Verify Android Session for LinkedIn (NEW)
 // =========================
-
 export const verifyAndroidSessionLinkedin = async (req, res) => {
   try {
     const { userId } = req.query;
@@ -849,6 +1214,7 @@ export const verifyAndroidSessionLinkedin = async (req, res) => {
     const isExpired = Date.now() - timestamp > 30 * 60 * 1000;
 
     if (isExpired) {
+      // Clear expired session
       delete req.session.linkedinOAuth;
       req.session.save();
 
@@ -875,4 +1241,4 @@ export const verifyAndroidSessionLinkedin = async (req, res) => {
       error: err.message
     });
   }
-};
+}; 
