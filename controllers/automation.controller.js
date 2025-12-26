@@ -84,8 +84,8 @@ export const getUserAccounts = async (req, res) => {
 
 export const getUserAccounts = async (req, res) => {
   try {
-    console.log("Fetching all accounts for user:", req.params);
     const { userId } = req.params;
+
     if (!userId) {
       return res.status(400).json({ msg: "User ID is required" });
     }
@@ -98,15 +98,18 @@ export const getUserAccounts = async (req, res) => {
     const accounts = [
       ...socialAccounts.map(a => ({
         ...a,
-        platform: a.platform,   // facebook / instagram
+        platform: a.platform,        // facebook / instagram
+        providerId: a.providerId,
         source: "social"
       })),
+
       ...twitterAccounts.map(a => ({
         ...a,
-        platform: "twitter",
-        source: "twitter"
+        platform: a.platform,        // 🔥 twitter / linkedin
+        providerId: a.providerId || a.meta?.twitterId || a.meta?.linkedinId,
+        source: "oauth"
       }))
-    ];
+    ].filter(a => a.providerId);     // 🔥 safety
 
     res.json({ data: accounts });
   } catch (err) {
