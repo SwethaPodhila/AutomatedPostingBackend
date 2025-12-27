@@ -1,61 +1,45 @@
+// models/Automation.js
 import mongoose from "mongoose";
 
-const AutomationSchema = new mongoose.Schema({
-  userId: {
-    type: String,
-    required: true
-  },
+const AutomationSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-  prompt: {
-    type: String,
-    required: true
-  },
+    platform: {
+      type: String,
+      enum: ["facebook", "instagram", "linkedin", "twitter"],
+      required: true,
+    },
 
-  frequency: {
-    type: String,
-    default: "daily"
-  },
+    pageId: {
+      type: String,
+      required: true,
+    },
 
-  interval: {
-    type: Number,
-    default: 1
-  },
+    // 🔥 ONLY INPUT
+    prompt: {
+      type: String,
+      required: true,
+    },
 
-  // 🔥 CHANGE STRING → DATE
-  startDate: {
-    type: Date,
-    required: true
-  },
+    // 🔁 SCHEDULING (same as manual)
+    startDate: Date,
+    endDate: Date,
+    times: [String], // ["10:00"]
 
-  endDate: {
-    type: Date,
-    required: true
-  },
+    status: {
+      type: String,
+      enum: ["scheduled", "completed", "failed"],
+      default: "scheduled",
+    },
 
-  time: {
-    type: String, // "10:30"
-    required: true
+    lastRunAt: Date, // 🔒 prevent duplicate per time slot
   },
-
-  nextRunAt: {
-    type: Date,
-    required: true
-  },
-
-  lastPostedAt: {
-    type: Date,
-    default: null
-  },
-
-  pageIds: {
-    type: [String],
-    required: true
-  },
-
-  status: {
-    type: String,
-    default: "active"
-  }
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 export default mongoose.model("Automation", AutomationSchema);

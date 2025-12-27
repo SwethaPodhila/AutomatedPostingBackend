@@ -1,5 +1,5 @@
 import express from "express";
-import { triggerAutomation, getUserAccounts, universalPublish } from "../controllers/automation.controller.js";
+import { createAutomation, getUserAccounts, universalPublish } from "../controllers/automation.controller.js";
 
 const router = express.Router();
 
@@ -24,12 +24,16 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({ storage });
 
-router.post("/trigger", triggerAutomation);
 router.get("/accounts/:userId", getUserAccounts);
 router.post(
     "/publish",
     upload.single("media"), // works even if no media
     universalPublish
+);
+
+router.post(
+    "/auto-publish",
+    createAutomation
 );
 
 export default router;

@@ -19,6 +19,7 @@
     "node-schedule": "^2.1.1",
     "nodemailer": "^7.0.11",
     "openai": "^6.15.0",
+    "streamifier": "^0.1.1",
     "twitter-api-v2": "^1.28.0"
   }
 }

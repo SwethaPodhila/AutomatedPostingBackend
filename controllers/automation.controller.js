@@ -8,81 +8,6 @@ import { publishToPage } from "../utils/FbApis.js";
 import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
 
-export const triggerAutomation = async (req, res) => {
-  try {
-    console.log("Request body:", req.body);
-    const {
-      userId,
-      prompt,
-      startDate,
-      endDate,
-      time,
-      pageIds
-    } = req.body;
-
-    // 🔴 Validation
-    if (
-      !userId ||
-      !prompt ||
-      !startDate ||
-      !endDate ||
-      !time ||
-      !pageIds?.length
-    ) {
-      return res.status(400).json({ message: "Missing required fields" });
-    }
-
-    // 🔴 Verify social accounts belong to user
-    const accounts = await SocialAccount.find({
-      _id: { $in: pageIds },
-      user: userId
-    });
-
-    if (!accounts.length) {
-      return res.status(400).json({
-        message: "Invalid social accounts"
-      });
-    }
-
-    // 🔥 Create first run datetime
-    const nextRunAt = new Date(`${startDate}T${time}:00`);
-
-    await Automation.create({
-      userId,
-      prompt,
-
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
-
-      time,
-      pageIds,
-      nextRunAt,
-      status: "active"
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Automation creation failed" });
-  }
-};
-/*
-export const getUserAccounts = async (req, res) => {
-  console.log("Fetching accounts for user:", req.params);
-  try {
-    const { userId } = req.params;
-    if (!userId) return res.status(400).json({ msg: "User ID is required" });
-
-    const accounts = await SocialAccount.find({ user: String(userId) });
-
-    res.json({ data: accounts });
-  } catch (err) {
-    console.error("Error fetching user accounts:", err);
-    res.status(500).json({ msg: "Failed to fetch accounts" });
-  }
-};
-*/
-
 export const getUserAccounts = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -339,12 +264,80 @@ export const universalPublish = async (req, res) => {
 
       return res.json({ success: true, platform: "linkedin" });
     }
-    
+
 
     return res.status(400).json({ msg: "Invalid platform" });
 
   } catch (err) {
     console.error("🔥 PUBLISH ERROR:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const createAutomation = async (req, res) => {
+  console.log("🔵 ENTERED AUTOMATION CONTROLLER");
+
+  try {
+    const { userId, pageIds, prompt, startDate, endDate, times } = req.body;
+
+    console.log("📦 Raw Request Body:", req.body);
+
+    // ================= VALIDATION =================
+    if (!userId) return res.status(400).json({ msg: "Missing userId" });
+    if (!pageIds?.length) return res.status(400).json({ msg: "Missing pageIds" });
+    if (!prompt) return res.status(400).json({ msg: "Missing prompt" });
+    if (!startDate || !endDate) {
+      return res.status(400).json({ msg: "Missing startDate or endDate" });
+    }
+    if (!times?.length || times.some(t => !t)) {
+      return res.status(400).json({ msg: "Invalid times array" });
+    }
+
+    console.log("✅ Validation passed");
+    console.log("🕒 Times array:", times);
+
+    const normalizedStartDate = new Date(startDate);
+    const normalizedEndDate = new Date(endDate);
+
+    // ================= CREATE AUTOMATIONS =================
+    for (const pageId of pageIds) {
+
+      // 🔍 Find account from BOTH collections
+      let acc =
+        await SocialAccount.findOne({ providerId: pageId }) ||
+        await TwitterAccount.findOne({ providerId: pageId, platform: "linkedin" });
+
+      if (!acc) {
+        console.log("⚠️ Account not found for pageId:", pageId);
+        continue;
+      }
+
+      console.log("✅ Account Found:", {
+        pageId,
+        platform: acc.platform,
+      });
+
+      const automation = await Automation.create({
+        user: userId,
+        platform: acc.platform,        // 🔥 KEY FIX
+        pageId: acc.providerId,
+        prompt,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
+        times,
+        status: "scheduled",
+      });
+
+      console.log("✅ Automation Created:", automation._id);
+    }
+
+    return res.json({
+      success: true,
+      message: "Automation created successfully",
+    });
+
+  } catch (err) {
+    console.error("🔥 AUTOMATION CREATE ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 };

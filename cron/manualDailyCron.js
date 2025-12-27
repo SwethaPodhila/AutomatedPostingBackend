@@ -6,6 +6,11 @@ import { publishToPage } from "../utils/FbApis.js";
 import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
 
+import Automation from "../models/Automation.js";
+import { generateAICaptionAndImage } from "../utils/aiAutomation.js";
+import fs from "fs";
+
+
 // 🔁 Runs every minute
 cron.schedule("* * * * *", async () => {
   try {
@@ -111,7 +116,100 @@ cron.schedule("* * * * *", async () => {
         await post.save();
       }
     }
-  } catch (err) {
+
+
+    /* =====================================================
+         🤖 AI AUTOMATION POSTS
+      ===================================================== */
+
+    const automations = await Automation.find({
+      status: "scheduled",
+      times: currentTime,
+    });
+
+    console.log(`🤖 Automations: ${automations.length}`);
+
+    for (const auto of automations) {
+      try {
+        const startDateStr = new Date(auto.startDate).toLocaleDateString("en-CA");
+        const endDateStr = new Date(auto.endDate).toLocaleDateString("en-CA");
+
+        if (todayStr < startDateStr || todayStr > endDateStr) continue;
+
+        // 🔒 Prevent duplicate same minute
+        if (
+          auto.lastRunAt &&
+          auto.lastRunAt.toLocaleDateString("en-CA") === todayStr &&
+          auto.lastRunAt.toTimeString().slice(0, 5) === currentTime
+        ) {
+          continue;
+        }
+
+        let acc = await SocialAccount.findOne({
+          providerId: auto.pageId,
+          platform: auto.platform,
+        });
+
+        if (!acc && auto.platform === "linkedin") {
+          acc = await TwitterAccount.findOne({
+            providerId: auto.pageId,
+            platform: "linkedin",
+          });
+        }
+
+        if (!acc) continue;
+
+        console.log("🤖 Automation posting to", auto.platform);
+
+        // 🧠 AI GENERATION (FIXED)
+        const { caption, mediaUrl } =
+          await generateAICaptionAndImage(auto.prompt);
+
+        // 🚀 PUBLISH
+        if (auto.platform === "facebook") {
+          await publishToPage({
+            pageAccessToken: acc.accessToken,
+            pageId: auto.pageId,
+            message: caption,
+            mediaUrl: mediaUrl || null,
+            mediaType: mediaUrl ? "image" : null,
+          });
+        }
+
+        if (auto.platform === "instagram") {
+          if (!mediaUrl) continue; // Instagram needs image
+          await publishInstagramUtil({
+            igUserId: acc.providerId,
+            accessToken: acc.accessToken,
+            mediaUrl: mediaUrl,
+            mediaType: "image",
+            caption,
+          });
+        }
+
+        if (auto.platform === "linkedin") {
+          await publishToLinkedIn({
+            accessToken: acc.accessToken,
+            providerId: acc.providerId,
+            content: caption,
+            mediaPath: mediaUrl || null,
+            mediaType: mediaUrl ? "image" : null,
+          });
+        }
+
+        auto.lastRunAt = istNow;
+        if (todayStr === endDateStr) auto.status = "completed";
+        await auto.save();
+
+        console.log("✅ Automation post done");
+      } catch (err) {
+        console.error("❌ Automation error:", err.message);
+      }
+    }
+  }
+
+
+  catch (err) {
     console.error("🔥 Cron Crash:", err);
   }
 });
