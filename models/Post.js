@@ -1,101 +1,88 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const PostSchema = new mongoose.Schema({
-  // User who created the post
   user: {
-    type: String,
-    required: true,
-    index: true
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
   },
-  
-  // Platform information
   platform: {
     type: String,
     required: true,
-    enum: ["twitter", "linkedin"],
-    index: true
+    enum: ["twitter", "linkedin", "youtube"] // ✅ added YouTube
   },
-  
-  // Platform-specific post ID (Tweet ID, LinkedIn Post ID)
+
+  accessToken: String,
+  accessTokenSecret: String, // for Twitter only
+
   providerId: {
     type: String,
-    required: true,
-    index: true
+    default: null
   },
-  
-  // Post content
   content: {
     type: String,
-    required: true
+    default: ""
   },
-  
-  // Media attachments (images, videos, etc.)
-  mediaUrls: [{
-    type: String
-  }],
-  
-  // When the post was published
-  postedAt: {
-    type: Date,
-    default: Date.now,
-    index: true
+  mediaType: {
+    type: String,
+    enum: ["image", "video", "gif", "youtube", null], // ✅ added youtube
+    default: null
   },
-  
-  // Post status
+  mediaUrl: {
+    type: String,
+    default: null
+  },
+  cloudinaryPublicId: {
+    type: String,
+    default: null
+  },
   status: {
     type: String,
-    enum: ["draft", "scheduled", "posted", "failed"],
-    default: "posted"
+    enum: ["draft", "scheduled", "processing", "posted", "failed"],
+    default: "draft"
   },
-  
-  // Engagement metrics
-  likesCount: {
-    type: Number,
-    default: 0
+  scheduledTime: {
+    type: Date,
+    default: null
   },
-  
-  commentsCount: {
-    type: Number,
-    default: 0
+  postedAt: {
+    type: Date,
+    default: null
   },
-  
-  sharesCount: {
-    type: Number,
-    default: 0
-  },
-  
-  // Direct link to the post
   postUrl: {
-    type: String
+    type: String,
+    default: null
   },
-  
-  // Account info at time of posting
+  scheduleJobId: {
+    type: String,
+    default: null
+  },
+  error: {
+    type: String,
+    default: null
+  },
+  linkedinAssetId: {
+    type: String,
+    default: null
+  },
+  youtubeVideoId: { // ✅ YouTube specific
+    type: String,
+    default: null
+  },
+  youtubeChannelId: { // ✅ YouTube specific
+    type: String,
+    default: null
+  },
   accountInfo: {
     username: String,
     name: String,
+    firstName: String,
+    lastName: String,
     profileImage: String,
-    platformId: String // twitterId or linkedinId
-  },
-  
-  // Additional metadata
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
+    platformId: String
   }
 }, {
-  timestamps: true // Adds createdAt and updatedAt automatically
+  timestamps: true
 });
 
-// Compound index for user + platform queries
-PostSchema.index({ user: 1, platform: 1, postedAt: -1 });
-
-// Index for status queries
-PostSchema.index({ status: 1 });
-
-// Index for platform-specific post ID lookups
-PostSchema.index({ providerId: 1, platform: 1 }, { unique: true });
-
-// Text index for searching post content
-PostSchema.index({ content: 'text' });
-
-export default mongoose.model('Post', PostSchema);
+export default mongoose.model("Post", PostSchema);

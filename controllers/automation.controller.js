@@ -266,6 +266,74 @@ export const universalPublish = async (req, res) => {
     }
 
 
+    // ================= TELEGRAM =================
+    if (platform === "telegram") {
+
+      console.log("🟢 ENTERED TELEGRAM BLOCK");
+
+      for (const chatId of parsedPageIds) {
+
+        const acc = await SocialAccount.findOne({
+          user: userId,
+          platform: "telegram",
+          providerId: chatId,
+        });
+
+        console.log("🔍 Telegram acc for", chatId, acc);
+
+        // ❗ IMPORTANT: do NOT continue silently
+        if (!acc) {
+          console.log("❌ Telegram account NOT FOUND in DB");
+          continue;
+        }
+
+        const mediaUrl = media ? media.path : null;
+
+        // 🔥 IMMEDIATE POST
+        if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
+          await postToTelegram({
+            botToken: acc.accessToken,
+            chatId,
+            message,
+            mediaUrl,
+          });
+
+          console.log("💾 Saving Telegram POSTED");
+
+          await AutoManual.create({
+            user: userId,
+            platform: "telegram",
+            pageId: chatId,
+            message,
+            mediaUrl,
+            status: "posted",
+          });
+
+        }
+        // ⏰ SCHEDULED
+        else {
+
+          console.log("💾 Saving Telegram SCHEDULED");
+
+          await AutoManual.create({
+            user: userId,
+            platform: "telegram",
+            pageId: chatId,
+            message,
+            mediaUrl,
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
+            times: parsedTimes,
+            status: "scheduled",
+          });
+        }
+      }
+
+      return res.json({ success: true, platform: "telegram" });
+    }
+
+
     return res.status(400).json({ msg: "Invalid platform" });
 
   } catch (err) {

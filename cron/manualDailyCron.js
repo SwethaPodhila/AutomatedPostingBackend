@@ -2,14 +2,15 @@ import cron from "node-cron";
 import AutoManual from "../models/AutoManual.js";
 import SocialAccount from "../models/socialAccount.js";
 import TwitterAccount from "../models/TwitterAccount.js";
+
 import { publishToPage } from "../utils/FbApis.js";
 import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
+import { postToTelegram } from "../utils/telegram.js"
 
 import Automation from "../models/Automation.js";
 import { generateAICaptionAndImage } from "../utils/aiAutomation.js";
 import fs from "fs";
-
 
 // 🔁 Runs every minute
 cron.schedule("* * * * *", async () => {
@@ -98,6 +99,16 @@ cron.schedule("* * * * *", async () => {
             content: post.message,        // 🔥 correct key
             mediaPath: post.mediaUrl || null,
             mediaType: post.mediaType || null,
+          });
+        }
+
+        // ✅ ADD THIS
+        if (post.platform === "telegram") {
+          await postToTelegram({
+            botToken: acc.accessToken,
+            chatId: post.pageId,
+            message: post.message,
+            mediaUrl: post.mediaUrl || null,
           });
         }
 
@@ -197,6 +208,16 @@ cron.schedule("* * * * *", async () => {
           });
         }
 
+        // ✅ ADD THIS
+        if (post.platform === "telegram") {
+          await postToTelegram({
+            botToken: acc.accessToken,
+            chatId: post.pageId,
+            message: post.message,
+            mediaUrl: post.mediaUrl || null,
+          });
+        }
+
         auto.lastRunAt = istNow;
         if (todayStr === endDateStr) auto.status = "completed";
         await auto.save();
@@ -213,3 +234,4 @@ cron.schedule("* * * * *", async () => {
     console.error("🔥 Cron Crash:", err);
   }
 });
+

@@ -13,6 +13,10 @@ import MongoStore from "connect-mongo";
 import twitterRoutes from "./routes/twitter.routes.js";
 import linkedinRoutes from "./routes/linkedin.routes.js";
 import automationRoutes from "./routes/automation.routes.js";
+import youtubeRoutes from './routes/youtube.routes.js';
+import pinterestRoutes from "./routes/pinterest.routes.js";
+import TelegramRoutes from "./routes/telegram.routes.js"
+
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
@@ -47,6 +51,20 @@ import {
   getLinkedInPosts
 } from "./controllers/linkedin.controller.js";
 
+import {
+  connectYouTube,
+  youtubeCallback,
+  uploadYouTubeVideo,
+  checkYouTubeConnection,
+  disconnectYouTube
+} from "./controllers/youtube.controller.js";
+
+// =========================
+// ✅ ADD THIS LINE HERE (IMAGE UPLOADER IMPORT)
+// =========================
+import cloudinary, { uploadImageToCloud } from "./config/cloudinary.js"; // ✅ Import from single file // 👈 ADD HERE
+
+
 dotenv.config();
 connectDB();
 
@@ -80,6 +98,8 @@ app.use("/api/twitter", twitterRoutes);
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
+app.use("/pinterest",pinterestRoutes)
+app.use("/telegram", TelegramRoutes)
 
 // =========================
 // PATH SETUP
@@ -126,6 +146,29 @@ const upload = multer({
   }
 });
 
+
+
+// =========================
+// SESSION CONFIG
+// =========================
+app.use(
+  session({
+    name: "social_session",
+    secret: process.env.SESSION_SECRET || "change-this-secret",
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+      mongoUrl: process.env.MONGO_URI || "mongodb://127.0.0.1:27017/socialmedia",
+      collectionName: "sessions"
+    }),
+    cookie: {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+    }
+  })
+);
 
 // publish & metrics
 //app.post('/publish/facebook', facebookController.publish);
@@ -196,6 +239,25 @@ app.post("/api/linkedin/disconnect", disconnectLinkedIn);
 app.get("/api/linkedin/posts", getLinkedInPosts);
 app.get("/api/linkedin/verify-session", verifyAndroidSessionLinkedin);
 app.get("/api/linkedin/profile", getLinkedInProfile);
+
+
+// YOUTUBE ROUTES ✅ ADD THIS FULL BLOCK
+// =========================
+// OAuth connect & callback
+app.get("/auth/youtube", connectYouTube);
+app.get("/auth/youtube/callback", youtubeCallback);
+app.get("/auth/google/callback", youtubeCallback); // optional, alias
+
+// Check connection
+app.get("/api/youtube/check", checkYouTubeConnection);
+
+// Upload video
+app.post("/api/youtube/upload", upload.single("media"), uploadYouTubeVideo);
+
+// Disconnect account
+app.post("/api/youtube/disconnect", disconnectYouTube);
+
+
 
 // =========================
 //  📌 HEALTH
