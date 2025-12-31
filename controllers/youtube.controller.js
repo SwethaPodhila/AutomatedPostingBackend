@@ -198,7 +198,7 @@ export const youtubeCallback = async (req, res) => {
     }
   } catch (err) {
     console.error("❌ YouTube Callback Error:", err.message);
-    res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com"}/youtube-connect?error=auth_failed`);
+    res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com"}/youtube-connect?error=auth_failed`);
   }
 };
 

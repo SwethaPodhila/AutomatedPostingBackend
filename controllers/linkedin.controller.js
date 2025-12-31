@@ -11,7 +11,7 @@ dotenv.config();
 
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID;
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET;
-const BACKEND_URL = process.env.BACKEND_URL || "https://automatedpostingbackend.onrender.com";
+const BACKEND_URL = process.env.BACKEND_URL || "https://automatedpostingbackend-h9dc.onrender.com";
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com";
 
 // Android Deep Link Configuration
