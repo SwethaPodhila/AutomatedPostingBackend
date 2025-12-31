@@ -310,7 +310,7 @@ export const instagramAuthRedirect = (req, res) => {
   console.log("userId:", userId);
 
   const redirectUri =
-    "https://automatedpostingbackend.onrender.com/social/instagram/callback";
+    "https://automatedpostingbackend-h9dc.onrender.com/social/instagram/callback";
 
   console.log("redirectUri:", redirectUri);
 
@@ -347,7 +347,7 @@ export const instagramCallback = async (req, res) => {
         params: {
           client_id: process.env.FB_APP_ID,
           client_secret: process.env.FB_APP_SECRET,
-          redirect_uri: "https://automatedpostingbackend.onrender.com/social/instagram/callback",
+          redirect_uri: "https://automatedpostingbackend-h9dc.onrender.com/social/instagram/callback",
           code
         }
       }

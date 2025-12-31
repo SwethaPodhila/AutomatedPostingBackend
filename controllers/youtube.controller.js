@@ -15,7 +15,7 @@ dotenv.config();
 const oauth2Client = new google.auth.OAuth2(
   process.env.YOUTUBE_CLIENT_ID,
   process.env.YOUTUBE_CLIENT_SECRET,
-  process.env.YOUTUBE_REDIRECT_URI="https://automatedpostingsbackend.onrender.com/api/youtube/callback"
+  process.env.YOUTUBE_REDIRECT_URI="https://automatedpostingbackend-h9dc.onrender.com/api/youtube/callback"
 );
 
 const SCOPES = [
@@ -75,7 +75,7 @@ export const youtubeCallback = async (req, res) => {
 
     if (!code || !userId) {
       console.error("❌ Missing code or userId in callback");
-      return res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com"}/youtube-connect?error=missing_params`);
+      return res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com"}/youtube-connect?error=missing_params`);
     }
 
     // Exchange code for tokens
@@ -187,14 +187,14 @@ export const youtubeCallback = async (req, res) => {
       }
 
       // Redirect to YouTube Manager
-      const successRedirectUrl = `${process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com"}/youtube-manager?youtube=connected&channel=${encodeURIComponent(channelName)}&channelId=${channelId}`;
+      const successRedirectUrl = `${process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com"}/youtube-manager?youtube=connected&channel=${encodeURIComponent(channelName)}&channelId=${channelId}`;
       console.log(`🌐 Redirecting to: ${successRedirectUrl}`);
       
       res.redirect(successRedirectUrl);
 
     } catch (dbError) {
       console.error("❌ Database save error:", dbError.message);
-      res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend.onrender.com"}/youtube-connect?error=auth_failed`);
+      res.redirect(`${process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com"}/youtube-connect?error=auth_failed`);
     }
   } catch (err) {
     console.error("❌ YouTube Callback Error:", err.message);
