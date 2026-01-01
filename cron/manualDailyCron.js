@@ -7,6 +7,7 @@ import { publishToPage } from "../utils/FbApis.js";
 import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
 import { postToTelegram } from "../utils/telegram.js"
+import { publishToPinterest } from "../utils/pinterest.js";
 
 import Automation from "../models/Automation.js";
 import { generateAICaptionAndImage } from "../utils/aiAutomation.js";
@@ -109,6 +110,18 @@ cron.schedule("* * * * *", async () => {
             chatId: post.pageId,
             message: post.message,
             mediaUrl: post.mediaUrl || null,
+          });
+        }
+
+        // ✅ ADD PINTEREST
+        if (post.platform === "pinterest") {
+          await publishToPinterest({ 
+            accessToken: acc.accessToken,
+            boardId: post.pageId,
+            title: "Automated Post",
+            description: post.message,
+            imageUrl: post.mediaUrl,
+            link: null,
           });
         }
 

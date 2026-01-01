@@ -7,6 +7,8 @@ import { publishToPage } from "../utils/FbApis.js";
 
 import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
+import { postToTelegram } from "../utils/telegram.js";
+import { publishToPinterest } from "../utils/pinterest.js";
 
 export const getUserAccounts = async (req, res) => {
   try {
@@ -331,6 +333,81 @@ export const universalPublish = async (req, res) => {
       }
 
       return res.json({ success: true, platform: "telegram" });
+    }
+
+
+    // ================= PINTEREST =================
+    if (platform === "pinterest") {
+
+      console.log("📌 ENTERED PINTEREST BLOCK");
+
+      if (!media) {
+        return res.status(400).json({ msg: "Image required for Pinterest" });
+      }
+
+      for (const boardId of parsedPageIds) {
+
+        const acc = await SocialAccount.findOne({
+          user: userId,
+          platform: "pinterest",
+          providerId: boardId,
+        });
+
+        if (!acc) {
+          console.log("❌ Pinterest account not found for board:", boardId);
+          continue;
+        }
+
+        const mediaUrl = media.path; // must be PUBLIC URL (S3 / Cloudinary)
+
+        // 🔥 IMMEDIATE POST
+        if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
+          console.log("📤 Publishing PIN");
+
+          const pinRes = await publishToPinterest({
+            accessToken: acc.accessToken,
+            boardId,
+            title: message?.slice(0, 100),
+            description: message,
+            imageUrl: mediaUrl,
+            link: "https://automatedpostingsfrontend-7d5o.onrender.com", // optional
+          });
+
+          await AutoManual.create({
+            user: userId,
+            platform: "pinterest",
+            pageId: boardId,
+            message,
+            mediaUrl,
+            postId: pinRes.id,
+            status: "posted",
+          });
+
+        }
+        // ⏰ SCHEDULE
+        else {
+
+          try {
+            await AutoManual.create({
+              user: userId,
+              platform: "pinterest",
+              pageId: boardId,
+              message,
+              mediaUrl,
+              startDate: normalizedStartDate,
+              endDate: normalizedEndDate,
+              times: parsedTimes,
+              status: "scheduled",
+            });
+            console.log("✅ Scheduled Pinterest post saved for board:", boardId);
+          } catch (err) {
+            console.error("❌ DB Save Error:", err);
+          }
+        }
+      }
+
+      return res.json({ success: true, platform: "pinterest" });
     }
 
 

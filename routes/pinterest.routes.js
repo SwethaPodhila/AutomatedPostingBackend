@@ -9,3 +9,4 @@ router.get("/auth",  pinterestController.redirectToPinterest);
 router.get("/callback",  pinterestController.pinterestCallback);
 
 module.exports = router;
+ 
