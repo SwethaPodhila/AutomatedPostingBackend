@@ -15,7 +15,8 @@ import linkedinRoutes from "./routes/linkedin.routes.js";
 import automationRoutes from "./routes/automation.routes.js";
 import youtubeRoutes from './routes/youtube.routes.js';
 import pinterestRoutes from "./routes/pinterest.routes.js";
-import TelegramRoutes from "./routes/telegram.routes.js"
+import TelegramRoutes from "./routes/telegram.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -100,6 +101,7 @@ app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
 app.use("/pinterest",pinterestRoutes)
 app.use("/telegram", TelegramRoutes)
+app.use("/payment", paymentRoutes);
 
 // =========================
 // PATH SETUP
