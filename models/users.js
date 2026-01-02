@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true },
   otp: { type: String },
   otpExpires: { type: Date },
+  resetPasswordOtp: { type: String },   // forgot-password OTP
+  resetPasswordOtpExpires: { type: Date }, // forgot-password OTP expiry
   isVerified: { type: Boolean, default: false },
 });
 

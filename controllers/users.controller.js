@@ -135,9 +135,95 @@ export const login = async (req, res) => {
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
-        res.json({ msg: "Login successful", token,  userId: user._id.toString(),success: true });
-       // res.json({ msg: "Login successful", token });
+        res.json({ msg: "Login successful", token, userId: user._id.toString(), success: true });
+        // res.json({ msg: "Login successful", token });
     } catch (err) {
         res.status(500).json({ msg: err.message });
     }
+};
+
+// Helper to generate 6-digit OTP
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+export const forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ msg: "User not found", success: false });
+
+        const otp = generateOtp();
+        user.resetPasswordOtp = otp;
+        user.resetPasswordOtpExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+        await user.save();
+
+        // Send OTP email
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: "Your OTP for Password Reset",
+            text: `Your OTP is ${otp}. It expires in 10 minutes.`,
+        });
+
+        res.json({ msg: "OTP sent to your email", success: true });
+    } catch (err) {
+        console.error("Forgot Password Error:", err.message);
+        res.status(500).json({ msg: "Server error", success: false });
+    }
+};
+
+// 2️⃣ Verify OTP for Forgot Password
+export const verifyOtpForForgotPassword = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ msg: "User not found", success: false });
+
+        if (user.resetPasswordOtp !== otp)
+            return res.status(400).json({ msg: "Invalid OTP", success: false });
+
+        if (Date.now() > user.resetPasswordOtpExpires)
+            return res.status(400).json({ msg: "OTP expired", success: false });
+
+        // OTP verified
+        user.resetPasswordOtp = null;
+        user.resetPasswordOtpExpires = null;
+        await user.save();
+
+        res.json({ msg: "OTP verified successfully", success: true });
+    } catch (err) {
+        console.error("Verify OTP Error:", err.message);
+        res.status(500).json({ msg: "Server error", success: false });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(400).json({ msg: "User not found", success: false });
+
+    // hash the password
+    const salt = await bcrypt.genSalt(10); // 10 rounds
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    user.password = hashedPassword;
+    await user.save();
+
+    res.json({ msg: "Password updated successfully", success: true });
+  } catch (err) {
+    console.error("Reset Password Error:", err.message);
+    res.status(500).json({ msg: "Server error", success: false });
+  }
 };
