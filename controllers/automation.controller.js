@@ -486,3 +486,125 @@ export const createAutomation = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+
+/* ===============================
+   HELPER: GET DATES BETWEEN
+================================ */
+const getDatesBetween = (start, end) => {
+  const dates = [];
+  const current = new Date(start);
+
+  while (current <= end) {
+    dates.push(new Date(current));
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+};
+
+/* ===============================
+   WEEKLY CALENDAR CONTROLLER
+   Monday → Sunday
+================================ */
+
+export const getWeeklyCalendar = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { weekStart } = req.query;
+
+    if (!weekStart) {
+      return res.status(400).json({
+        success: false,
+        message: "weekStart is required",
+      });
+    }
+
+    const startOfWeek = new Date(weekStart);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    let expandedPosts = [];
+
+    /* =======================
+       🔹 AUTO MANUAL POSTS
+    ======================= */
+    const manualSchedules = await AutoManual.find({
+      user: userId,
+      startDate: { $lte: endOfWeek },
+      endDate: { $gte: startOfWeek },
+    });
+
+    manualSchedules.forEach((item) => {
+      const validStart =
+        item.startDate > startOfWeek ? item.startDate : startOfWeek;
+
+      const validEnd =
+        item.endDate < endOfWeek ? item.endDate : endOfWeek;
+
+      const dates = getDatesBetween(validStart, validEnd);
+
+      dates.forEach((date) => {
+        item.times.forEach((time) => {
+          expandedPosts.push({
+            source: "manual",
+            date: date.toISOString().split("T")[0],
+            time,
+            platform: item.platform,
+            pageId: item.pageId,
+            message: item.message,
+            mediaUrl: item.mediaUrl,
+            mediaType: item.mediaType,
+            status: item.status,
+          });
+        });
+      });
+    });
+
+    /* =======================
+       🔹 AUTOMATION POSTS
+    ======================= */
+    const automationSchedules = await Automation.find({
+      user: userId,
+      startDate: { $lte: endOfWeek },
+      endDate: { $gte: startOfWeek },
+    });
+
+    automationSchedules.forEach((item) => {
+      const validStart =
+        item.startDate > startOfWeek ? item.startDate : startOfWeek;
+
+      const validEnd =
+        item.endDate < endOfWeek ? item.endDate : endOfWeek;
+
+      const dates = getDatesBetween(validStart, validEnd);
+
+      dates.forEach((date) => {
+        item.times.forEach((time) => {
+          expandedPosts.push({
+            source: "automation",
+            date: date.toISOString().split("T")[0],
+            time,
+            platform: item.platform,
+            pageId: item.pageId,
+            message: item.prompt, // 🔥 automation uses prompt
+            mediaUrl: null,
+            mediaType: null,
+            status: item.status,
+          });
+        });
+      });
+    });
+
+    return res.json({
+      success: true,
+      data: expandedPosts,
+    });
+  } catch (error) {
+    console.error("Calendar error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};

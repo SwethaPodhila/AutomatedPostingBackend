@@ -17,6 +17,8 @@ const userSchema = new mongoose.Schema({
   subscriptionStatus: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "INACTIVE" },
   paymentId: { type: String }, // Cashfree transaction reference
   planExpires: { type: Date },
-});
+},
+  { timestamps: true }
+);
 
 export default mongoose.model("User", userSchema);

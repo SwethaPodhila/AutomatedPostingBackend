@@ -73,43 +73,58 @@ export const verifyOtp = async (req, res) => {
 
         const user = await User.findOne({ email });
         if (!user) {
-            console.log("❌ User not found for email:", email);
             return res.json({ msg: "User not found", success: false });
         }
 
-        console.log("🟢 User found:", user.email);
-        console.log("🕒 Stored OTP:", user.otp, " | Expires at:", new Date(user.otpExpires));
-
-        // check otp validity
+        // ❌ OTP validation
         if (user.otp !== otp) {
-            console.log("❌ Invalid OTP entered");
             return res.json({ msg: "Invalid OTP", success: false });
         }
 
         if (Date.now() > user.otpExpires) {
-            console.log("⌛ OTP expired");
             return res.json({ msg: "OTP expired", success: false });
         }
 
-        // ✅ Verification successful
+        // ✅ OTP VERIFIED → START FREE TRIAL
         user.isVerified = true;
+        user.plan = "FREE";
+        user.subscriptionStatus = "ACTIVE";
+
+        // 🔥 Trial start time = NOW (use createdAt)
+        user.createdAt = new Date();
+
         user.otp = null;
         user.otpExpires = null;
         await user.save();
 
-        console.log("✅ OTP verified successfully for:", user.email);
+        console.log("✅ OTP verified & free trial started for:", user.email);
 
-        // 🔑 Generate JWT token (expires in 1 day)
+        // 🔑 JWT token (include plan info)
         const token = jwt.sign(
-            { id: user._id.toString(), name: user.name, email: user.email },
+            {
+                id: user._id.toString(),
+                name: user.name,
+                email: user.email,
+                plan: user.plan,
+                subscriptionStatus: user.subscriptionStatus,
+                createdAt: user.createdAt
+            },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
+
         return res.json({
             msg: "Account verified successfully",
             success: true,
-            userId: user._id.toString(),
             token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                plan: user.plan,
+                subscriptionStatus: user.subscriptionStatus,
+                createdAt: user.createdAt
+            }
         });
     } catch (err) {
         console.error("🚨 Error in verifyOtp:", err.message);
@@ -117,30 +132,76 @@ export const verifyOtp = async (req, res) => {
     }
 };
 
+
 // 🧾 Login Controller
 export const login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email });
 
-        if (!user) return res.json({ msg: "User not found", success: false });
+        const user = await User.findOne({ email });
+        if (!user)
+            return res.json({ msg: "User not found", success: false });
+
         if (!user.isVerified)
-            return res.json({ msg: "Please verify your email before login", success: false });
+            return res.json({
+                msg: "Please verify your email before login",
+                success: false
+            });
 
         const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) return res.json({ msg: "Invalid password", success: false });
+        if (!isMatch)
+            return res.json({ msg: "Invalid password", success: false });
 
+        // 🔥 7 DAYS FREE TRIAL CHECK (using createdAt)
+        if (user.plan === "FREE") {
+            const trialEnd =
+                new Date(user.createdAt).getTime() +
+                7 * 24 * 60 * 60 * 1000;
+
+            if (Date.now() > trialEnd) {
+                user.subscriptionStatus = "INACTIVE";
+                await user.save();
+
+                return res.json({
+                    success: false,
+                    msg: "Your 7 days free trial is completed. Please upgrade."
+                });
+            }
+        }
+
+        // 🔑 JWT token with plan info
         const token = jwt.sign(
-            { id: user._id.toString(), name: user.name, email: user.email },
+            {
+                id: user._id.toString(),
+                name: user.name,
+                email: user.email,
+                plan: user.plan,
+                subscriptionStatus: user.subscriptionStatus,
+                createdAt: user.createdAt
+            },
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
-        res.json({ msg: "Login successful", token, userId: user._id.toString(), success: true });
-        // res.json({ msg: "Login successful", token });
+
+        return res.json({
+            msg: "Login successful",
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                plan: user.plan,
+                phone: user.phone,
+                subscriptionStatus: user.subscriptionStatus,
+                createdAt: user.createdAt
+            }
+        });
     } catch (err) {
         res.status(500).json({ msg: err.message });
     }
 };
+
 
 // Helper to generate 6-digit OTP
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -207,23 +268,23 @@ export const verifyOtpForForgotPassword = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+    try {
+        const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user)
-      return res.status(400).json({ msg: "User not found", success: false });
+        const user = await User.findOne({ email });
+        if (!user)
+            return res.status(400).json({ msg: "User not found", success: false });
 
-    // hash the password
-    const salt = await bcrypt.genSalt(10); // 10 rounds
-    const hashedPassword = await bcrypt.hash(password, salt);
+        // hash the password
+        const salt = await bcrypt.genSalt(10); // 10 rounds
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-    user.password = hashedPassword;
-    await user.save();
+        user.password = hashedPassword;
+        await user.save();
 
-    res.json({ msg: "Password updated successfully", success: true });
-  } catch (err) {
-    console.error("Reset Password Error:", err.message);
-    res.status(500).json({ msg: "Server error", success: false });
-  }
+        res.json({ msg: "Password updated successfully", success: true });
+    } catch (err) {
+        console.error("Reset Password Error:", err.message);
+        res.status(500).json({ msg: "Server error", success: false });
+    }
 };
