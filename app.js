@@ -65,7 +65,6 @@ import {
 // =========================
 import cloudinary, { uploadImageToCloud } from "./config/cloudinary.js"; // ✅ Import from single file // 👈 ADD HERE
 
-
 dotenv.config();
 connectDB();
 

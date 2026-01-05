@@ -44,16 +44,13 @@ export const authRedirect = (req, res) => {
 
 export const callback = async (req, res) => {
   try {
-    console.log("===== FACEBOOK CALLBACK HIT =====");
-    console.log("QUERY:", req.query);
-
     const { code, state } = req.query;
     if (!code || !state) return res.status(400).send("Invalid callback");
 
     const [userId, source] = state.split(":");
     const redirectUri = FB_REDIRECT_URI;
 
-    // 🔹 Exchange code → access token
+    // 1️⃣ Exchange code → USER access token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
@@ -62,24 +59,30 @@ export const callback = async (req, res) => {
     });
 
     const userAccessToken = tokenRes.access_token;
-    if (!userAccessToken)
-      return res.status(500).send("Access token failed");
+    if (!userAccessToken) throw new Error("User token missing");
 
-    // 🔹 Get all FB pages
-    const pagesRes = await fbApi.getUserPages(userAccessToken);
-    const pages = pagesRes.data || [];
+    // 2️⃣ Fetch pages
+    const pages = await fbApi.getUserPages(userAccessToken);
 
-    for (const page of pages) {
-      const pageToken = page.access_token || userAccessToken;
+    for (const page of pages.data || []) {
+      // ❌ VERY IMPORTANT
+      if (!page.access_token) {
+        console.log("Skipping page (no page token):", page.id);
+        continue;
+      }
 
-      // 🔹 Page picture
-      const picture = await fbApi.getPagePicture(page.id, pageToken);
+      // 3️⃣ Page picture
+      const pictureUrl = await fbApi.getPagePicture(
+        page.id,
+        page.access_token
+      );
 
-      // 🔹 Check IG business account linked
-      const igRes = await fbApi.getInstagramAccount(page.id, pageToken);
-      const igAccountId = igRes?.instagram_business_account?.id || null;
+      // 4️⃣ Check Instagram business account
+      const igAccount = await fbApi.getInstagramBusinessAccount(
+        page.id,
+        page.access_token
+      );
 
-      // ✅ Save Facebook Page
       await SocialAccount.findOneAndUpdate(
         {
           user: userId,
@@ -90,43 +93,19 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: pageToken,
+          accessToken: page.access_token, // ✅ ONLY PAGE TOKEN
           connectedFrom: source || "web",
-          scopes: page.tasks || [],
           meta: {
-            name: page.name,
-            category: page.category,
-            picture,
-            instagramAccountId: igAccountId,
+            ...page,
+            picture: pictureUrl,
+            instagramBusinessAccount: igAccount || null,
           },
         },
         { upsert: true, new: true }
       );
-
-      // ✅ Save Instagram Account (if linked)
-      if (igAccountId) {
-        await SocialAccount.findOneAndUpdate(
-          {
-            user: userId,
-            platform: "instagram",
-            providerId: igAccountId,
-          },
-          {
-            user: userId,
-            platform: "instagram",
-            providerId: igAccountId,
-            accessToken: pageToken,
-            connectedFrom: source || "web",
-            meta: {
-              linkedPageId: page.id,
-            },
-          },
-          { upsert: true, new: true }
-        );
-      }
     }
 
-    // 🔚 Redirect
+    // 5️⃣ Redirect
     if (source === "android") {
       return res.redirect("com.wingspan.aimediahub://login-success");
     }
