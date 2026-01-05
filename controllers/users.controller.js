@@ -117,6 +117,7 @@ export const verifyOtp = async (req, res) => {
             msg: "Account verified successfully",
             success: true,
             token,
+            userId: user._id.toString(),
             user: {
                 id: user._id,
                 name: user.name,
@@ -187,6 +188,7 @@ export const login = async (req, res) => {
             msg: "Login successful",
             success: true,
             token,
+            userId: user._id.toString(),
             user: {
                 id: user._id,
                 name: user.name,

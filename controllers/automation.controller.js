@@ -410,7 +410,6 @@ export const universalPublish = async (req, res) => {
       return res.json({ success: true, platform: "pinterest" });
     }
 
-
     return res.status(400).json({ msg: "Invalid platform" });
 
   } catch (err) {
@@ -520,7 +519,7 @@ export const getWeeklyCalendar = async (req, res) => {
       });
     }
 
-    const startOfWeek = new Date(weekStart);
+    const startOfWeek = new Date(weekStart); 
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
 

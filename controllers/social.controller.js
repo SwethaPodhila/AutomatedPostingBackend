@@ -13,6 +13,8 @@ import schedule from "node-schedule";
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL, ANDROID_REDIRECT_URI } = process.env;
 
+// controllers/facebookAuth.js
+
 export const authRedirect = (req, res) => {
   const { userId, source } = req.query;
   if (!userId) return res.status(400).send("Missing userId");
@@ -21,14 +23,13 @@ export const authRedirect = (req, res) => {
     "pages_read_engagement",
     "pages_manage_posts",
     "pages_show_list",
+    "instagram_basic",
+    "instagram_content_publish",
     "public_profile",
     "email",
   ];
 
-  // ✅ ONLY ONE REDIRECT URI
   const redirectUri = FB_REDIRECT_URI;
-  // ex: https://automatedpostingbackend.onrender.com/social/facebook/callback
-
   const state = `${userId}:${source || "web"}`;
 
   const url =
@@ -44,18 +45,15 @@ export const authRedirect = (req, res) => {
 export const callback = async (req, res) => {
   try {
     console.log("===== FACEBOOK CALLBACK HIT =====");
-    console.log("FULL QUERY:", req.query);
+    console.log("QUERY:", req.query);
 
     const { code, state } = req.query;
-
-    if (!code) return res.status(400).send("Missing code");
-    if (!state) return res.status(400).send("Missing state");
+    if (!code || !state) return res.status(400).send("Invalid callback");
 
     const [userId, source] = state.split(":");
-
-    // ✅ SAME redirect_uri as authRedirect
     const redirectUri = FB_REDIRECT_URI;
 
+    // 🔹 Exchange code → access token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
@@ -63,17 +61,25 @@ export const callback = async (req, res) => {
       code,
     });
 
-    const accessToken = tokenRes.access_token;
-    if (!accessToken) return res.status(500).send("Failed to get access token");
+    const userAccessToken = tokenRes.access_token;
+    if (!userAccessToken)
+      return res.status(500).send("Access token failed");
 
-    const pages = await fbApi.getUserPages(accessToken);
+    // 🔹 Get all FB pages
+    const pagesRes = await fbApi.getUserPages(userAccessToken);
+    const pages = pagesRes.data || [];
 
-    for (const page of pages.data || []) {
-      const pictureUrl = await fbApi.getPagePicture(
-        page.id,
-        page.access_token || accessToken
-      );
+    for (const page of pages) {
+      const pageToken = page.access_token || userAccessToken;
 
+      // 🔹 Page picture
+      const picture = await fbApi.getPagePicture(page.id, pageToken);
+
+      // 🔹 Check IG business account linked
+      const igRes = await fbApi.getInstagramAccount(page.id, pageToken);
+      const igAccountId = igRes?.instagram_business_account?.id || null;
+
+      // ✅ Save Facebook Page
       await SocialAccount.findOneAndUpdate(
         {
           user: userId,
@@ -84,23 +90,50 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: page.access_token || accessToken,
-          scopes: page.tasks || [],
+          accessToken: pageToken,
           connectedFrom: source || "web",
-          meta: { ...page, picture: pictureUrl },
+          scopes: page.tasks || [],
+          meta: {
+            name: page.name,
+            category: page.category,
+            picture,
+            instagramAccountId: igAccountId,
+          },
         },
         { upsert: true, new: true }
       );
+
+      // ✅ Save Instagram Account (if linked)
+      if (igAccountId) {
+        await SocialAccount.findOneAndUpdate(
+          {
+            user: userId,
+            platform: "instagram",
+            providerId: igAccountId,
+          },
+          {
+            user: userId,
+            platform: "instagram",
+            providerId: igAccountId,
+            accessToken: pageToken,
+            connectedFrom: source || "web",
+            meta: {
+              linkedPageId: page.id,
+            },
+          },
+          { upsert: true, new: true }
+        );
+      }
     }
 
-    // ✅ FINAL REDIRECT
+    // 🔚 Redirect
     if (source === "android") {
       return res.redirect("com.wingspan.aimediahub://login-success");
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
   } catch (err) {
-    console.error("Callback Error ==>", err.response?.data || err.message);
+    console.error("Facebook Callback Error:", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
   }
 };
