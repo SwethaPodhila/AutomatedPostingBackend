@@ -51,6 +51,8 @@ export const callback = async (req, res) => {
 
     const [userId, source] = state.split(":");
 
+    console.log("📌 Callback received for user:", userId, "source:", source);
+
     // 1️⃣ Exchange code → short token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
@@ -58,8 +60,8 @@ export const callback = async (req, res) => {
       redirectUri: FB_REDIRECT_URI,
       code,
     });
-
     const shortToken = tokenRes.access_token;
+    console.log("📌 Short-Lived Token:", shortToken);
     if (!shortToken) throw new Error("User token missing");
 
     // 2️⃣ Long lived token
@@ -68,75 +70,88 @@ export const callback = async (req, res) => {
       FB_APP_ID,
       FB_APP_SECRET
     );
+    console.log("📌 Long-Lived Token:", longToken);
 
-    // 3️⃣ PROFILE-OWNED pages
-    const profilePages = await fbApi.getUserPages(longToken);
+    // 3️⃣ Debug token to see granted permissions
+    const debug = await fbApi.debugToken(longToken);
+    console.log("📌 Token Debug Info:", debug.data);
 
-    // 4️⃣ BUSINESS-OWNED pages
-    const businesses = await fbApi.getUserBusinesses(longToken);
-
-    let businessPages = [];
-    for (const biz of businesses) {
-      const pages = await fbApi.getBusinessPages(biz.id, longToken);
-      businessPages.push(...pages);
+    // 4️⃣ PROFILE-OWNED pages
+    let profilePages = [];
+    try {
+      console.log("📌 Fetching profile pages...");
+      profilePages = await fbApi.getUserPages(longToken);
+      console.log("📘 Profile Pages:", profilePages);
+    } catch (err) {
+      console.error("❌ Error fetching profile pages:", err.response?.data || err.message);
     }
 
-    // 5️⃣ MERGE + REMOVE DUPLICATES
-    const pageMap = new Map();
+    // 5️⃣ BUSINESS-OWNED pages
+    let businessPages = [];
+    try {
+      console.log("📌 Fetching user businesses...");
+      const businesses = await fbApi.getUserBusinesses(longToken);
+      console.log("📘 User Businesses:", businesses);
 
-    [...profilePages, ...businessPages].forEach(p => {
-      if (p?.id && p?.access_token) {
-        pageMap.set(p.id, p);
+      for (const biz of businesses) {
+        try {
+          console.log("📌 Fetching business pages for:", biz.id);
+          const pages = await fbApi.getBusinessPages(biz.id, longToken);
+          console.log("📘 Business Pages for", biz.id, ":", pages);
+          businessPages.push(...pages);
+        } catch (err) {
+          console.error(`❌ Error fetching business pages for ${biz.id}:`, err.response?.data || err.message);
+        }
       }
-    });
+    } catch (err) {
+      console.error("❌ Error fetching businesses:", err.response?.data || err.message);
+    }
 
+    // 6️⃣ MERGE + REMOVE DUPLICATES
+    const pageMap = new Map();
+    [...profilePages, ...businessPages].forEach(p => {
+      if (p?.id && p?.access_token) pageMap.set(p.id, p);
+    });
     const allPages = [...pageMap.values()];
     console.log("📘 ALL CONNECTED PAGES:", allPages);
 
-    // 6️⃣ SAVE PAGES
+    // 7️⃣ SAVE PAGES
     for (const page of allPages) {
-      const pictureUrl = await fbApi.getPagePicture(
-        page.id,
-        page.access_token
-      );
+      try {
+        const pictureUrl = await fbApi.getPagePicture(page.id, page.access_token);
+        const igAccount = await fbApi.getInstagramBusinessAccount(page.id, page.access_token);
 
-      const igAccount = await fbApi.getInstagramBusinessAccount(
-        page.id,
-        page.access_token
-      );
-
-      await SocialAccount.findOneAndUpdate(
-        {
-          user: userId,
-          platform: "facebook",
-          providerId: page.id,
-        },
-        {
-          user: userId,
-          platform: "facebook",
-          providerId: page.id,
-          accessToken: page.access_token,
-          connectedFrom: source || "web",
-          meta: {
-            id: page.id,
-            name: page.name,
-            category: page.category,
-            tasks: page.tasks,
-            picture: pictureUrl,
-            instagramBusinessAccount: igAccount || null,
+        await SocialAccount.findOneAndUpdate(
+          { user: userId, platform: "facebook", providerId: page.id },
+          {
+            user: userId,
+            platform: "facebook",
+            providerId: page.id,
+            accessToken: page.access_token,
+            connectedFrom: source || "web",
+            meta: {
+              id: page.id,
+              name: page.name,
+              category: page.category,
+              tasks: page.tasks,
+              picture: pictureUrl,
+              instagramBusinessAccount: igAccount || null,
+            },
           },
-        },
-        { upsert: true, new: true }
-      );
+          { upsert: true, new: true }
+        );
+        console.log(`✅ Saved page ${page.name} (${page.id})`);
+      } catch (err) {
+        console.error(`❌ Error saving page ${page.id}:`, err.response?.data || err.message);
+      }
     }
 
-    // 7️⃣ Redirect
+    // 8️⃣ Redirect
     if (source === "android") {
       return res.redirect("com.wingspan.aimediahub://login-success");
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
-
   } catch (err) {
     console.error("❌ Facebook Callback Error:", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
