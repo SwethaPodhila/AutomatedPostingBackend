@@ -5,9 +5,8 @@ import fs from "fs";
 
 const FB_OAUTH_URL = 'https://www.facebook.com/v17.0/dialog/oauth';
 const FB_TOKEN_URL = 'https://graph.facebook.com/v17.0/oauth/access_token';
-//const FB_GRAPH = 'https://graph.facebook.com/v17.0';
 
-const FB_GRAPH = "https://graph.facebook.com/v20.0";
+const FB_GRAPH = 'https://graph.facebook.com/v20.0';
 
 export function getAuthUrl({ clientId, redirectUri, state, scopes = [] }) {
     const params = {
@@ -70,6 +69,27 @@ export async function getInstagramBusinessAccount(pageId, pageAccessToken) {
         return null;
     }
 }
+
+export async function getLongLivedUserToken(
+    shortToken,
+    clientId,
+    clientSecret
+) {
+    const res = await axios.get(
+        "https://graph.facebook.com/v20.0/oauth/access_token",
+        {
+            params: {
+                grant_type: "fb_exchange_token",
+                client_id: clientId,
+                client_secret: clientSecret,
+                fb_exchange_token: shortToken,
+            },
+        }
+    );
+
+    return res.data.access_token;
+}
+
 
 export async function publishToPage({
     pageAccessToken,

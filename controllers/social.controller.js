@@ -24,6 +24,7 @@ export const authRedirect = (req, res) => {
     "pages_manage_posts",
     "pages_show_list",
     "instagram_basic",
+    "pages_read_user_content",
     "instagram_content_publish",
     "public_profile",
     "email",
@@ -50,7 +51,7 @@ export const callback = async (req, res) => {
     const [userId, source] = state.split(":");
     const redirectUri = FB_REDIRECT_URI;
 
-    // 1️⃣ Exchange code → USER access token
+    // 1️⃣ Exchange code → SHORT-LIVED user token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
@@ -58,26 +59,34 @@ export const callback = async (req, res) => {
       code,
     });
 
-    const userAccessToken = tokenRes.access_token;
-    if (!userAccessToken) throw new Error("User token missing");
+    const shortUserToken = tokenRes.access_token;
+    if (!shortUserToken) throw new Error("User token missing");
 
-    // 2️⃣ Fetch pages
-    const pages = await fbApi.getUserPages(userAccessToken);
+    // 2️⃣ Convert → LONG-LIVED user token 🔥 (CRITICAL FIX)
+    const longLivedUserToken = await fbApi.getLongLivedUserToken(
+      shortUserToken,
+      FB_APP_ID,
+      FB_APP_SECRET
+    );
+
+    // 3️⃣ Fetch ALL Facebook pages (IG-linked pages now INCLUDED)
+    const pages = await fbApi.getUserPages(longLivedUserToken);
+
+    console.log("📘 Facebook Pages:", JSON.stringify(pages, null, 2));
 
     for (const page of pages.data || []) {
-      // ❌ VERY IMPORTANT
       if (!page.access_token) {
-        console.log("Skipping page (no page token):", page.id);
+        console.log("❌ Skipping page (no page token):", page.id);
         continue;
       }
 
-      // 3️⃣ Page picture
+      // 4️⃣ Page profile picture
       const pictureUrl = await fbApi.getPagePicture(
         page.id,
         page.access_token
       );
 
-      // 4️⃣ Check Instagram business account
+      // 5️⃣ Instagram business account (optional)
       const igAccount = await fbApi.getInstagramBusinessAccount(
         page.id,
         page.access_token
@@ -93,10 +102,13 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: page.access_token, // ✅ ONLY PAGE TOKEN
+          accessToken: page.access_token, // ✅ PAGE TOKEN ONLY
           connectedFrom: source || "web",
           meta: {
-            ...page,
+            id: page.id,
+            name: page.name,
+            category: page.category,
+            tasks: page.tasks,
             picture: pictureUrl,
             instagramBusinessAccount: igAccount || null,
           },
@@ -105,14 +117,17 @@ export const callback = async (req, res) => {
       );
     }
 
-    // 5️⃣ Redirect
+    // 6️⃣ Redirect
     if (source === "android") {
       return res.redirect("com.wingspan.aimediahub://login-success");
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
   } catch (err) {
-    console.error("Facebook Callback Error:", err.response?.data || err.message);
+    console.error(
+      "❌ Facebook Callback Error:",
+      err.response?.data || err.message
+    );
     return res.status(500).send("Facebook callback error");
   }
 };
