@@ -51,6 +51,26 @@ export async function getUserPages(accessToken) {
     return res.data;
 }
 
+export async function getInstagramBusinessAccount(pageId, pageAccessToken) {
+    try {
+        const res = await axios.get(`${FB_GRAPH}/${pageId}`, {
+            params: {
+                fields: "instagram_business_account",
+                access_token: pageAccessToken,
+            },
+        });
+
+        return res.data?.instagram_business_account || null;
+    } catch (err) {
+        console.log(
+            "IG business account not found for page:",
+            pageId,
+            err.response?.data || err.message
+        );
+        return null;
+    }
+}
+
 export async function publishToPage({
     pageAccessToken,
     pageId,
