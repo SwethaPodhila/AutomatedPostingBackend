@@ -38,7 +38,8 @@ export const authRedirect = (req, res) => {
     `?client_id=${FB_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
     `&state=${encodeURIComponent(state)}` +
-    `&scope=${scopes.join(",")}`;
+    `&scope=${scopes.join(",")}` +
+    `&auth_type=rerequest`;
 
   return res.redirect(url);
 };
@@ -71,6 +72,11 @@ export const callback = async (req, res) => {
 
     // 3️⃣ Fetch ALL Facebook pages (IG-linked pages now INCLUDED)
     const pages = await fbApi.getUserPages(longLivedUserToken);
+
+    console.log(
+      "🔍 TOKEN SCOPES:",
+      debugToken.data.scopes
+    );
 
     console.log("📘 Facebook Pages:", JSON.stringify(pages, null, 2));
 
