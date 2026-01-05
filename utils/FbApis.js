@@ -45,10 +45,21 @@ export async function getPagePicture(pageId, accessToken) {
 };
 
 export async function getUserPages(accessToken) {
-    const url = `${FB_GRAPH}/me/accounts?access_token=${accessToken}`;
-    const res = await axios.get(url);
-    return res.data;
+    let pages = [];
+    let url = "https://graph.facebook.com/v20.0/me/accounts";
+
+    while (url) {
+        const res = await axios.get(url, {
+            params: { access_token: accessToken },
+        });
+
+        pages.push(...(res.data.data || []));
+        url = res.data.paging?.next || null;
+    }
+
+    return pages;
 }
+
 
 export async function getInstagramBusinessAccount(pageId, pageAccessToken) {
     try {
@@ -105,6 +116,33 @@ export async function getLongLivedUserToken(
     );
 
     return res.data.access_token;
+}
+
+export async function getUserBusinesses(userAccessToken) {
+    const res = await axios.get(
+        "https://graph.facebook.com/v20.0/me/businesses",
+        { params: { access_token: userAccessToken } }
+    );
+    return res.data.data || [];
+}
+
+export async function getBusinessPages(businessId, userAccessToken) {
+    let pages = [];
+    let url = `https://graph.facebook.com/v20.0/${businessId}/owned_pages`;
+
+    while (url) {
+        const res = await axios.get(url, {
+            params: {
+                fields: "id,name,category,access_token,tasks",
+                access_token: userAccessToken,
+            },
+        });
+
+        pages.push(...(res.data.data || []));
+        url = res.data.paging?.next || null;
+    }
+
+    return pages;
 }
 
 

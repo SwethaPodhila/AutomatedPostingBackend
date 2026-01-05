@@ -50,50 +50,56 @@ export const callback = async (req, res) => {
     if (!code || !state) return res.status(400).send("Invalid callback");
 
     const [userId, source] = state.split(":");
-    const redirectUri = FB_REDIRECT_URI;
 
-    // 1️⃣ Exchange code → SHORT-LIVED user token
+    // 1️⃣ Exchange code → short token
     const tokenRes = await fbApi.exchangeCodeForToken({
       clientId: FB_APP_ID,
       clientSecret: FB_APP_SECRET,
-      redirectUri,
+      redirectUri: FB_REDIRECT_URI,
       code,
     });
 
-    const shortUserToken = tokenRes.access_token;
-    if (!shortUserToken) throw new Error("User token missing");
+    const shortToken = tokenRes.access_token;
+    if (!shortToken) throw new Error("User token missing");
 
-    // 2️⃣ Convert → LONG-LIVED user token 🔥 (CRITICAL FIX)
-    const longLivedUserToken = await fbApi.getLongLivedUserToken(
-      shortUserToken,
+    // 2️⃣ Long lived token
+    const longToken = await fbApi.getLongLivedUserToken(
+      shortToken,
       FB_APP_ID,
       FB_APP_SECRET
     );
 
-    // 3️⃣ Fetch ALL Facebook pages (IG-linked pages now INCLUDED)
-    const pages = await fbApi.getUserPages(longLivedUserToken);
-    const debugToken = await fbApi.debugToken(longLivedUserToken);
+    // 3️⃣ PROFILE-OWNED pages
+    const profilePages = await fbApi.getUserPages(longToken);
 
-    console.log(
-      "🔍 TOKEN SCOPES:",
-      debugToken.data.scopes
-    );
+    // 4️⃣ BUSINESS-OWNED pages
+    const businesses = await fbApi.getUserBusinesses(longToken);
 
-    console.log("📘 Facebook Pages:", JSON.stringify(pages, null, 2));
+    let businessPages = [];
+    for (const biz of businesses) {
+      const pages = await fbApi.getBusinessPages(biz.id, longToken);
+      businessPages.push(...pages);
+    }
 
-    for (const page of pages.data || []) {
-      if (!page.access_token) {
-        console.log("❌ Skipping page (no page token):", page.id);
-        continue;
+    // 5️⃣ MERGE + REMOVE DUPLICATES
+    const pageMap = new Map();
+
+    [...profilePages, ...businessPages].forEach(p => {
+      if (p?.id && p?.access_token) {
+        pageMap.set(p.id, p);
       }
+    });
 
-      // 4️⃣ Page profile picture
+    const allPages = [...pageMap.values()];
+    console.log("📘 ALL CONNECTED PAGES:", allPages);
+
+    // 6️⃣ SAVE PAGES
+    for (const page of allPages) {
       const pictureUrl = await fbApi.getPagePicture(
         page.id,
         page.access_token
       );
 
-      // 5️⃣ Instagram business account (optional)
       const igAccount = await fbApi.getInstagramBusinessAccount(
         page.id,
         page.access_token
@@ -109,7 +115,7 @@ export const callback = async (req, res) => {
           user: userId,
           platform: "facebook",
           providerId: page.id,
-          accessToken: page.access_token, // ✅ PAGE TOKEN ONLY
+          accessToken: page.access_token,
           connectedFrom: source || "web",
           meta: {
             id: page.id,
@@ -124,17 +130,15 @@ export const callback = async (req, res) => {
       );
     }
 
-    // 6️⃣ Redirect
+    // 7️⃣ Redirect
     if (source === "android") {
       return res.redirect("com.wingspan.aimediahub://login-success");
     }
 
     return res.redirect(`${FRONTEND_URL}/success`);
+
   } catch (err) {
-    console.error(
-      "❌ Facebook Callback Error:",
-      err.response?.data || err.message
-    );
+    console.error("❌ Facebook Callback Error:", err.response?.data || err.message);
     return res.status(500).send("Facebook callback error");
   }
 };
