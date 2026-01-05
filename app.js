@@ -76,6 +76,7 @@ app.set('trust proxy', 1);
 // ✅ CORS setup for multiple origins
 const allowedOrigins = [
   "http://localhost:3000", // your local frontend
+  "https://www.aiwingsglobal.com",
   "https://aiwingsglobal.com" // deployed frontend
 ];
 
@@ -99,7 +100,7 @@ app.use("/api/twitter", twitterRoutes);
 app.use("/user", userRoutes);
 app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
-app.use("/pinterest",pinterestRoutes)
+app.use("/pinterest", pinterestRoutes)
 app.use("/telegram", TelegramRoutes)
 app.use("/payment", paymentRoutes);
 
