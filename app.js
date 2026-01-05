@@ -76,7 +76,7 @@ app.set('trust proxy', 1);
 // ✅ CORS setup for multiple origins
 const allowedOrigins = [
   "http://localhost:3000", // your local frontend
-  "https://automatedpostingsfrontend-7d5o.onrender.com" // deployed frontend
+  "https://aiwingsglobal.com" // deployed frontend
 ];
 
 app.use(cors({
