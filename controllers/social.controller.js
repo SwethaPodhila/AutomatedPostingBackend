@@ -72,6 +72,7 @@ export const callback = async (req, res) => {
 
     // 3️⃣ Fetch ALL Facebook pages (IG-linked pages now INCLUDED)
     const pages = await fbApi.getUserPages(longLivedUserToken);
+    const debugToken = await fbApi.debugToken(longLivedUserToken);
 
     console.log(
       "🔍 TOKEN SCOPES:",
