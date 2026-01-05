@@ -70,6 +70,23 @@ export async function getInstagramBusinessAccount(pageId, pageAccessToken) {
     }
 }
 
+export async function debugToken(userAccessToken) {
+    const appAccessToken = `${process.env.FB_APP_ID}|${process.env.FB_APP_SECRET}`;
+
+    const res = await axios.get(
+        "https://graph.facebook.com/debug_token",
+        {
+            params: {
+                input_token: userAccessToken,
+                access_token: appAccessToken,
+            },
+        }
+    );
+
+    return res.data;
+}
+
+
 export async function getLongLivedUserToken(
     shortToken,
     clientId,
