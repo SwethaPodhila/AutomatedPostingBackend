@@ -17,6 +17,7 @@ import youtubeRoutes from './routes/youtube.routes.js';
 import pinterestRoutes from "./routes/pinterest.routes.js";
 import TelegramRoutes from "./routes/telegram.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import bodyParser from "body-parser";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -101,6 +102,13 @@ app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
 app.use("/pinterest", pinterestRoutes)
 app.use("/telegram", TelegramRoutes)
+
+// ONLY webhook route uses raw body
+app.use(
+  "/payment/webhook",
+  bodyParser.raw({ type: "application/json" })
+);
+
 app.use("/payment", paymentRoutes);
 
 // =========================

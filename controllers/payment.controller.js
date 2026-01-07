@@ -1,12 +1,13 @@
 import axios from "axios";
 import User from "../models/users.js";
+import crypto from "crypto";
 
 // 1️⃣ Create Order
 export const createOrder = async (req, res) => {
     try {
         const { plan, userId, customerName, customerEmail, customerPhone } = req.body;
 
-        const amount = plan === "PRO" ? 999 : plan === "ENTERPRISE" ? 1999 : 0;
+        const amount = plan === "PRO" ? 1 : plan === "ENTERPRISE" ? 2 : 0;
         if (!amount) return res.status(400).json({ error: "Invalid plan" });
 
         const orderId = `ORDER_${Date.now()}`;
@@ -32,7 +33,7 @@ export const createOrder = async (req, res) => {
         };
 
         const response = await axios.post(
-            "https://sandbox.cashfree.com/pg/orders",
+            "https://api.cashfree.com/pg/orders",
             body,
             { headers }
         );
@@ -49,13 +50,10 @@ export const createOrder = async (req, res) => {
     }
 };
 
-// 2️⃣ Payment Callback / Verification
 export const paymentCallback = async (req, res) => {
     try {
         const { orderId } = req.body;
-        if (!orderId) return res.status(400).json({ error: "Order ID missing" });
 
-        // Verify payment status with Cashfree
         const headers = {
             "x-client-id": process.env.CF_APP_ID,
             "x-client-secret": process.env.CF_SECRET_KEY,
@@ -63,15 +61,40 @@ export const paymentCallback = async (req, res) => {
         };
 
         const response = await axios.get(
-            `https://sandbox.cashfree.com/pg/orders/${orderId}`,
+            `https://api.cashfree.com/pg/orders/${orderId}`,
             { headers }
         );
 
-        console.log("🔍 Verify Order:", response.data);
+        return res.json({
+            orderStatus: response.data.order_status,
+        });
+    } catch (err) {
+        return res.status(500).json({ error: "Verification failed" });
+    }
+};
 
-        if (response.data.order_status === "PAID") {
-            const plan = response.data.order_note;
-            const userId = response.data.customer_details.customer_id;
+export const cashfreeWebhook = async (req, res) => {
+    try {
+        const signature = req.headers["x-webhook-signature"];
+        const rawBody = req.body;
+
+        const expectedSignature = crypto
+            .createHmac("sha256", process.env.CF_WEBHOOK_SECRET)
+            .update(rawBody)
+            .digest("base64");
+
+        if (signature !== expectedSignature) {
+            console.log("❌ Invalid webhook signature");
+            return res.status(400).send("Invalid signature");
+        }
+
+        const event = JSON.parse(rawBody.toString());
+
+        if (event.type === "PAYMENT_SUCCESS") {
+            const order = event.data.order;
+
+            const plan = order.order_note;
+            const userId = order.customer_details.customer_id;
 
             const planExpires = new Date();
             planExpires.setMonth(planExpires.getMonth() + 1);
@@ -79,17 +102,16 @@ export const paymentCallback = async (req, res) => {
             await User.findByIdAndUpdate(userId, {
                 plan,
                 subscriptionStatus: "ACTIVE",
-                paymentId: response.data.cf_order_id,
+                paymentId: order.cf_order_id,
                 planExpires,
             });
 
-            console.log("✅ DB UPDATED for user:", userId);
-            return res.json({ success: true });
-        } else {
-            return res.json({ success: false, message: "Payment not completed yet" });
+            console.log("✅ SECURE webhook DB updated:", userId);
         }
+
+        res.status(200).send("OK");
     } catch (err) {
-        console.error(err.response?.data || err.message);
-        res.status(500).json({ error: "Payment verification failed" });
+        console.error("Webhook error:", err.message);
+        res.status(500).send("Webhook failed");
     }
 };
