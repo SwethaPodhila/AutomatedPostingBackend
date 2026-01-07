@@ -17,7 +17,6 @@ import youtubeRoutes from './routes/youtube.routes.js';
 import pinterestRoutes from "./routes/pinterest.routes.js";
 import TelegramRoutes from "./routes/telegram.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
-import bodyParser from "body-parser";
 
 import path from "path";
 import { fileURLToPath } from "url";
