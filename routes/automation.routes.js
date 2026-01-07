@@ -1,5 +1,5 @@
 import express from "express";
-import { createAutomation, getUserAccounts, universalPublish,getWeeklyCalendar } from "../controllers/automation.controller.js";
+import { createAutomation, getUserAccounts, universalPublish,getCalendar } from "../controllers/automation.controller.js";
 
 const router = express.Router();
 
@@ -36,6 +36,6 @@ router.post(
     createAutomation
 );
 
-router.get("/weekly/:userId", getWeeklyCalendar);
+router.get("/weekly/:userId", getCalendar);
 
 export default router;
