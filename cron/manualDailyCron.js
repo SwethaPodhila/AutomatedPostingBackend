@@ -98,7 +98,7 @@ cron.schedule("* * * * *", async () => {
             accessToken: acc.accessToken,
             providerId: acc.providerId,   // 🔥 REQUIRED
             content: post.message,        // 🔥 correct key
-            mediaPath: post.mediaUrl || null,
+            mediaUrl: post.mediaUrl || null,
             mediaType: post.mediaType || null,
           });
         }
@@ -115,7 +115,7 @@ cron.schedule("* * * * *", async () => {
 
         // ✅ ADD PINTEREST
         if (post.platform === "pinterest") {
-          await publishToPinterest({ 
+          await publishToPinterest({
             accessToken: acc.accessToken,
             boardId: post.pageId,
             title: "Automated Post",
@@ -216,18 +216,30 @@ cron.schedule("* * * * *", async () => {
             accessToken: acc.accessToken,
             providerId: acc.providerId,
             content: caption,
-            mediaPath: mediaUrl || null,
+            mediaUrl: mediaUrl || null,
             mediaType: mediaUrl ? "image" : null,
           });
         }
 
         // ✅ ADD THIS
-        if (post.platform === "telegram") {
+        if (auto.platform === "telegram") {
           await postToTelegram({
             botToken: acc.accessToken,
-            chatId: post.pageId,
-            message: post.message,
-            mediaUrl: post.mediaUrl || null,
+            chatId: auto.pageId,
+            message: caption,
+            mediaUrl: mediaUrl || null,
+          });
+        }
+
+        // ✅ ADD PINTEREST
+        if (auto.platform === "pinterest") {
+          await publishToPinterest({
+            accessToken: acc.accessToken,
+            boardId: auto.pageId,
+            title: "Automated Post",
+            description: caption,
+            imageUrl: mediaUrl,
+            link: null,
           });
         }
 

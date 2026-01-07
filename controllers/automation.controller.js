@@ -506,22 +506,42 @@ const getDatesBetween = (start, end) => {
    WEEKLY CALENDAR CONTROLLER
    Monday → Sunday
 ================================ */
-
-export const getWeeklyCalendar = async (req, res) => {
+export const getCalendar = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { weekStart } = req.query;
+    const { date, view = "weekly" } = req.query;
 
-    if (!weekStart) {
+    if (!date) {
       return res.status(400).json({
         success: false,
-        message: "weekStart is required",
+        message: "date is required",
       });
     }
 
-    const startOfWeek = new Date(weekStart); 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    let startOfRange, endOfRange;
+    const baseDate = new Date(date);
+
+    /* =======================
+       🔹 DATE RANGE LOGIC
+    ======================= */
+    if (view === "monthly") {
+      // Month start & end
+      startOfRange = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth(),
+        1
+      );
+      endOfRange = new Date(
+        baseDate.getFullYear(),
+        baseDate.getMonth() + 1,
+        0
+      );
+    } else {
+      // Weekly (default)
+      startOfRange = new Date(baseDate);
+      endOfRange = new Date(baseDate);
+      endOfRange.setDate(startOfRange.getDate() + 6);
+    }
 
     let expandedPosts = [];
 
@@ -530,16 +550,16 @@ export const getWeeklyCalendar = async (req, res) => {
     ======================= */
     const manualSchedules = await AutoManual.find({
       user: userId,
-      startDate: { $lte: endOfWeek },
-      endDate: { $gte: startOfWeek },
+      startDate: { $lte: endOfRange },
+      endDate: { $gte: startOfRange },
     });
 
     manualSchedules.forEach((item) => {
       const validStart =
-        item.startDate > startOfWeek ? item.startDate : startOfWeek;
+        item.startDate > startOfRange ? item.startDate : startOfRange;
 
       const validEnd =
-        item.endDate < endOfWeek ? item.endDate : endOfWeek;
+        item.endDate < endOfRange ? item.endDate : endOfRange;
 
       const dates = getDatesBetween(validStart, validEnd);
 
@@ -565,16 +585,16 @@ export const getWeeklyCalendar = async (req, res) => {
     ======================= */
     const automationSchedules = await Automation.find({
       user: userId,
-      startDate: { $lte: endOfWeek },
-      endDate: { $gte: startOfWeek },
+      startDate: { $lte: endOfRange },
+      endDate: { $gte: startOfRange },
     });
 
     automationSchedules.forEach((item) => {
       const validStart =
-        item.startDate > startOfWeek ? item.startDate : startOfWeek;
+        item.startDate > startOfRange ? item.startDate : startOfRange;
 
       const validEnd =
-        item.endDate < endOfWeek ? item.endDate : endOfWeek;
+        item.endDate < endOfRange ? item.endDate : endOfRange;
 
       const dates = getDatesBetween(validStart, validEnd);
 
@@ -586,7 +606,7 @@ export const getWeeklyCalendar = async (req, res) => {
             time,
             platform: item.platform,
             pageId: item.pageId,
-            message: item.prompt, // 🔥 automation uses prompt
+            message: item.prompt,
             mediaUrl: null,
             mediaType: null,
             status: item.status,
@@ -597,6 +617,11 @@ export const getWeeklyCalendar = async (req, res) => {
 
     return res.json({
       success: true,
+      view,
+      range: {
+        start: startOfRange,
+        end: endOfRange,
+      },
       data: expandedPosts,
     });
   } catch (error) {
