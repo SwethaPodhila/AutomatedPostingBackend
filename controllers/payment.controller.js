@@ -74,44 +74,46 @@ export const paymentCallback = async (req, res) => {
 };
 
 export const cashfreeWebhook = async (req, res) => {
-    try {
-        const signature = req.headers["x-webhook-signature"];
-        const rawBody = req.body;
+  try {
+    const event = req.body;
+    console.log("📩 Cashfree webhook received:", event.type);
 
-        const expectedSignature = crypto
-            .createHmac("sha256", process.env.CF_WEBHOOK_SECRET)
-            .update(rawBody)
-            .digest("base64");
+    const orderId = event?.data?.order?.order_id;
+    if (!orderId) return res.sendStatus(200);
 
-        if (signature !== expectedSignature) {
-            console.log("❌ Invalid webhook signature");
-            return res.status(400).send("Invalid signature");
-        }
+    // 🔐 Verify payment from Cashfree API
+    const response = await axios.get(
+      `https://api.cashfree.com/pg/orders/${orderId}`,
+      {
+        headers: {
+          "x-client-id": process.env.CF_APP_ID,
+          "x-client-secret": process.env.CF_SECRET_KEY,
+          "x-api-version": "2023-08-01",
+        },
+      }
+    );
 
-        const event = JSON.parse(rawBody.toString());
+    if (response.data.order_status === "PAID") {
+      const order = response.data;
+      const plan = order.order_note;
+      const userId = order.customer_details.customer_id;
 
-        if (event.type === "PAYMENT_SUCCESS") {
-            const order = event.data.order;
+      const planExpires = new Date();
+      planExpires.setMonth(planExpires.getMonth() + 1);
 
-            const plan = order.order_note;
-            const userId = order.customer_details.customer_id;
+      await User.findByIdAndUpdate(userId, {
+        plan,
+        subscriptionStatus: "ACTIVE",
+        paymentId: order.cf_order_id,
+        planExpires,
+      });
 
-            const planExpires = new Date();
-            planExpires.setMonth(planExpires.getMonth() + 1);
-
-            await User.findByIdAndUpdate(userId, {
-                plan,
-                subscriptionStatus: "ACTIVE",
-                paymentId: order.cf_order_id,
-                planExpires,
-            });
-
-            console.log("✅ SECURE webhook DB updated:", userId);
-        }
-
-        res.status(200).send("OK");
-    } catch (err) {
-        console.error("Webhook error:", err.message);
-        res.status(500).send("Webhook failed");
+      console.log("✅ Payment verified & DB updated:", userId);
     }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Webhook error:", err.message);
+    res.sendStatus(200); // NEVER fail webhook
+  }
 };
