@@ -4,73 +4,74 @@ import crypto from "crypto";
 
 // 1️⃣ Create Order
 export const createOrder = async (req, res) => {
-    try {
-        const { plan, userId, customerName, customerEmail, customerPhone } = req.body;
+  try {
+    const { plan, userId, customerName, customerEmail, customerPhone } = req.body;
 
-        const amount = plan === "PRO" ? 1 : plan === "ENTERPRISE" ? 2 : 0;
-        if (!amount) return res.status(400).json({ error: "Invalid plan" });
+    const amount = plan === "PRO" ? 1 : plan === "ENTERPRISE" ? 2 : 0;
+    if (!amount) return res.status(400).json({ error: "Invalid plan" });
 
-        const orderId = `ORDER_${Date.now()}`;
+    const orderId = `ORDER_${Date.now()}`;
 
-        const body = {
-            order_id: orderId,
-            order_amount: amount.toString(), // Cashfree expects string
-            order_currency: "INR",
-            customer_details: {
-                customer_id: userId,
-                customer_name: customerName,
-                customer_email: customerEmail,
-                customer_phone: customerPhone,
-            },
-            order_note: plan,
-        };
+    const body = {
+      order_id: orderId,
+      order_amount: amount.toString(), // Cashfree expects string
+      order_currency: "INR",
+      customer_details: {
+        customer_id: userId,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+      },
+      order_note: plan,
+    };
 
-        const headers = {
-            "Content-Type": "application/json",
-            "x-client-id": process.env.CF_APP_ID,
-            "x-client-secret": process.env.CF_SECRET_KEY,
-            "x-api-version": "2022-09-01",
-        };
+    const headers = {
+      "Content-Type": "application/json",
+      "x-client-id": process.env.CF_APP_ID,
+      "x-client-secret": process.env.CF_SECRET_KEY,
+      "x-api-version": "2022-09-01",
+    };
 
-        const response = await axios.post(
-            "https://api.cashfree.com/pg/orders",
-            body,
-            { headers }
-        );
+    const response = await axios.post(
+      "https://api.cashfree.com/pg/orders",
+      body,
+      { headers }
+    );
 
-        console.log("Cashfree order response:", response.data);
+    console.log("Cashfree order response:", response.data);
 
-        res.json({
-            orderId: orderId,
-            paymentSessionId: response.data.payment_session_id,
-        });
-    } catch (err) {
-        console.error(err.response?.data || err.message);
-        res.status(500).json({ error: "Failed to create order" });
-    }
+    res.json({
+      orderId: orderId,
+      paymentSessionId: response.data.payment_session_id,
+    });
+  } catch (err) {
+    console.error(err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to create order" });
+  }
 };
 
 export const paymentCallback = async (req, res) => {
-    try {
-        const { orderId } = req.body;
+  try {
+    const { orderId } = req.body;
 
-        const headers = {
-            "x-client-id": process.env.CF_APP_ID,
-            "x-client-secret": process.env.CF_SECRET_KEY,
-            "x-api-version": "2022-09-01",
-        };
+    const headers = {
+      "x-client-id": process.env.CF_APP_ID,
+      "x-client-secret": process.env.CF_SECRET_KEY,
+      "x-api-version": "2022-09-01",
+    };
 
-        const response = await axios.get(
-            `https://api.cashfree.com/pg/orders/${orderId}`,
-            { headers }
-        );
+    const response = await axios.get(
+      `https://api.cashfree.com/pg/orders/${orderId}`,
+      { headers }
+    );
 
-        return res.json({
-            orderStatus: response.data.order_status,
-        });
-    } catch (err) {
-        return res.status(500).json({ error: "Verification failed" });
-    }
+    return res.json({
+      success: isPaid,
+      orderStatus: response.data.order_status,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Verification failed" });
+  }
 };
 
 export const cashfreeWebhook = async (req, res) => {
