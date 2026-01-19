@@ -2,6 +2,7 @@ import User from "../models/users.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
+import Support from "../models/Support.js";
 
 // 📩 Send OTP Email
 const sendOtpEmail = async (email, otp) => {
@@ -315,6 +316,117 @@ export const getUserProfile = async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Server error",
+        });
+    }
+};
+
+// 🗑️ Delete User by ID
+export const deleteUserById = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!userId) {
+            return res.status(400).json({
+                msg: "User ID is required",
+                success: false
+            });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                msg: "User not found",
+                success: false
+            });
+        }
+
+        await User.findByIdAndDelete(userId);
+
+        return res.json({
+            msg: "User deleted successfully",
+            success: true
+        });
+
+    } catch (err) {
+        console.error("🚨 Error deleting user:", err);
+        res.status(500).json({
+            msg: "Server error",
+            success: false
+        });
+    }
+};
+
+// 🆘 CREATE SUPPORT REQUEST
+export const createSupport = async (req, res) => {
+    try {
+        const { name, email, subject, message } = req.body;
+
+        // 🔍 Validation
+        if (!name || !email || !subject || !message) {
+            return res.status(400).json({
+                success: false,
+                msg: "All fields are required"
+            });
+        }
+
+        // 💾 Save to DB
+        await Support.create({
+            name,
+            email,
+            subject,
+            message
+        });
+
+        // 📩 CREATE TRANSPORTER (IMPORTANT FIX)
+        const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS,
+            },
+        });
+
+        // 📩 Mail to Admin
+        await transporter.sendMail({
+            from: `"Website Support" <${process.env.EMAIL_USER}>`,
+            to: process.env.ADMIN_EMAIL,
+            subject: `New Support Request - ${subject}`,
+            html: `
+                <h2>New Support Request</h2>
+                <p><b>Name:</b> ${name}</p>
+                <p><b>Email:</b> ${email}</p>
+                <p><b>Issue:</b> ${subject}</p>
+                <p><b>Message:</b></p>
+                <p>${message}</p>
+            `
+        });
+
+        // 📩 Auto reply to User
+        await transporter.sendMail({
+            from: `"Support Team" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: "We have received your request",
+            html: `
+                <p>Hello ${name},</p>
+                <p>Thank you for contacting our support team.</p>
+                <p>We have received your request regarding <b>${subject}</b>.</p>
+                <p>Our team will get back to you shortly.</p>
+                <br/>
+                <p>Regards,<br/>Support Team</p>
+            `
+        });
+
+        res.json({
+            success: true,
+            msg: "Your request has been submitted successfully"
+        });
+
+    } catch (err) {
+        console.error("Support error:", err);
+        res.status(500).json({
+            success: false,
+            msg: "Server error"
         });
     }
 };
