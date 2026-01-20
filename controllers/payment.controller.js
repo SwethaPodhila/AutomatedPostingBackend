@@ -2,6 +2,10 @@ import axios from "axios";
 import User from "../models/users.js";
 import crypto from "crypto";
 
+const BASE_URL = process.env.CF_ENV === "sandbox"
+  ? "https://sandbox.cashfree.com/pg/orders"
+  : "https://api.cashfree.com/pg/orders";
+
 // 1️⃣ Create Order
 export const createOrder = async (req, res) => {
   try {
@@ -33,7 +37,7 @@ export const createOrder = async (req, res) => {
     };
 
     const response = await axios.post(
-      "https://api.cashfree.com/pg/orders",
+      `${BASE_URL}`,
       body,
       { headers }
     );
@@ -43,7 +47,9 @@ export const createOrder = async (req, res) => {
     res.json({
       orderId: orderId,
       paymentSessionId: response.data.payment_session_id,
+      cashfreeResponse: response.data, // add full response
     });
+
   } catch (err) {
     console.error(err.response?.data || err.message);
     res.status(500).json({ error: "Failed to create order" });
@@ -61,13 +67,15 @@ export const paymentCallback = async (req, res) => {
     };
 
     const response = await axios.get(
-      `https://api.cashfree.com/pg/orders/${orderId}`,
+      `${BASE_URL}/${orderId}`,
       { headers }
     );
+    const isPaid = response.data.order_status === "PAID";
 
     return res.json({
       success: isPaid,
       orderStatus: response.data.order_status,
+      cashfreeResponse: response.data, // add full response
     });
   } catch (err) {
     return res.status(500).json({ error: "Verification failed" });
@@ -84,7 +92,7 @@ export const cashfreeWebhook = async (req, res) => {
 
     // 🔐 Verify payment from Cashfree API
     const response = await axios.get(
-      `https://api.cashfree.com/pg/orders/${orderId}`,
+      `${BASE_URL}/${orderId}`,
       {
         headers: {
           "x-client-id": process.env.CF_APP_ID,
