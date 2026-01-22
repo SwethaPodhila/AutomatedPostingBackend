@@ -155,8 +155,6 @@ const upload = multer({
   }
 });
 
-
-
 // =========================
 // SESSION CONFIG
 // =========================
@@ -182,9 +180,9 @@ app.use(
 // publish & metrics
 //app.post('/publish/facebook', facebookController.publish);
 
-app.listen(process.env.PORT, () => {
-  console.log(`Server running on port ${process.env.PORT} 🚀`);
-});
+//app.listen(process.env.PORT, () => {
+//  console.log(`Server running on port ${process.env.PORT} 🚀`);
+//});
 
 // Twitter routes
 mongoose.connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/twitterdb")
@@ -336,7 +334,8 @@ app.get('/force-android/:userId', async (req, res) => {
 //  🚀 START SERVER
 // =========================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server started on port ${PORT}`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔐 Secure cookies: true`);
