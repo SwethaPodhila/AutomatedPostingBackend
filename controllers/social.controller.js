@@ -26,6 +26,8 @@ export const authRedirect = (req, res) => {
     "instagram_basic",
     "pages_read_user_content",
     "instagram_content_publish",
+    "business_management",
+    "pages_manage_metadata",
     "public_profile",
     "email",
   ];
