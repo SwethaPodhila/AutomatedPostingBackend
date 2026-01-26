@@ -470,7 +470,7 @@ export const instagramCallback = async (req, res) => {
 
     // 5️⃣ FINAL REDIRECT (🔥 IMPORTANT)
     if (source === "android") {
-      return res.redirect("com.wingspan.aimediahub://login-success");
+      return res.redirect("com.wingspan.aimediahub://instagram-success");
     }
 
     return res.redirect(`${process.env.FRONTEND_URL}/instagram-dashboard`);
