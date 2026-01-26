@@ -388,18 +388,25 @@ export const instagramAuthRedirect = (req, res) => {
   return res.redirect(url);
 };
 
-
 export const instagramCallback = async (req, res) => {
   try {
+    console.log("🔔 Instagram callback hit");
+
     const { code, state } = req.query;
-    if (!code || !state) return res.status(400).send("Invalid callback");
+    console.log("➡️ Query params:", { codePresent: !!code, state });
 
-    // 👇 SAME LOGIC AS FACEBOOK
+    if (!code || !state) {
+      console.log("❌ Missing code or state");
+      return res.status(400).send("Invalid callback");
+    }
+
     const [userId, source] = state.split(":");
-
-    console.log("📸 IG Callback for user:", userId, "source:", source);
+    console.log("👤 User ID:", userId);
+    console.log("📱 Source:", source);
 
     // 1️⃣ Exchange code → user access token
+    console.log("🔄 Exchanging code for access token...");
+
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v20.0/oauth/access_token",
       {
@@ -414,16 +421,31 @@ export const instagramCallback = async (req, res) => {
     );
 
     const userAccessToken = tokenRes.data.access_token;
+    console.log("🔑 User access token received:", !!userAccessToken);
+
     if (!userAccessToken) throw new Error("Access token missing");
 
     // 2️⃣ Get pages
+    console.log("📄 Fetching Facebook pages...");
+
     const pagesRes = await axios.get(
       "https://graph.facebook.com/v20.0/me/accounts",
       { params: { access_token: userAccessToken } }
     );
 
-    for (const page of pagesRes.data.data) {
+    const pages = pagesRes.data.data || [];
+    console.log(`📄 Total pages found: ${pages.length}`);
+
+    for (const page of pages) {
+      console.log("➡️ Page:", {
+        id: page.id,
+        name: page.name,
+        hasPageToken: !!page.access_token,
+      });
+
       // 3️⃣ Get IG business account
+      console.log(`🔍 Checking IG link for page: ${page.name}`);
+
       const igRes = await axios.get(
         `https://graph.facebook.com/v20.0/${page.id}`,
         {
@@ -434,10 +456,20 @@ export const instagramCallback = async (req, res) => {
         }
       );
 
+      console.log("📸 IG raw response:", igRes.data);
+
       const ig = igRes.data.instagram_business_account;
-      if (!ig) continue;
+
+      if (!ig) {
+        console.log(`⚠️ No IG business account linked for page: ${page.name}`);
+        continue;
+      }
+
+      console.log("✅ IG business account found:", ig.id);
 
       // 4️⃣ Get IG profile
+      console.log("👤 Fetching IG profile details...");
+
       const profileRes = await axios.get(
         `https://graph.facebook.com/v20.0/${ig.id}`,
         {
@@ -447,6 +479,11 @@ export const instagramCallback = async (req, res) => {
           },
         }
       );
+
+      console.log("📸 IG Profile:", profileRes.data);
+
+      // 5️⃣ Save to DB
+      console.log("💾 Saving Instagram account to DB...");
 
       await SocialAccount.findOneAndUpdate(
         { user: userId, platform: "instagram", providerId: ig.id },
@@ -469,18 +506,25 @@ export const instagramCallback = async (req, res) => {
       console.log(`✅ Instagram account saved: ${profileRes.data.username}`);
     }
 
-    // 5️⃣ FINAL REDIRECT (🔥 IMPORTANT)
+    console.log("🎯 Instagram callback completed");
+
+    // 6️⃣ Final redirect
     if (source === "android") {
+      console.log("📲 Redirecting to Android deep link");
       return res.redirect("com.wingspan.aimediahub://instagram-success");
     }
 
+    console.log("🌐 Redirecting to web dashboard");
     return res.redirect(`${process.env.FRONTEND_URL}/instagram-dashboard`);
+
   } catch (err) {
-    console.error("❌ IG CALLBACK ERROR:", err.response?.data || err.message);
+    console.error(
+      "❌ IG CALLBACK ERROR:",
+      err.response?.data || err.message
+    );
     return res.status(500).send("Instagram callback failed");
   }
 };
-
 
 const waitForVideoProcessing = async (creationId, accessToken) => {
   let status = "IN_PROGRESS";
