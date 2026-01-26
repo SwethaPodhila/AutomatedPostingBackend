@@ -282,6 +282,28 @@ export const getPages = async (req, res) => {
   }
 };
 
+export const getInstagramAccounts = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const accounts = await SocialAccount.find({
+      user: userId,
+      platform: "instagram"
+    });
+
+    return res.json({
+      success: true,
+      accounts
+    });
+  } catch (err) {
+    console.error(err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch Instagram accounts"
+    });
+  }
+};
+
 export const generateAICaption = async (req, res) => {
   try {
     console.log("🔥 AI GENERATE CAPTION HIT 🔥");
@@ -401,8 +423,6 @@ export const instagramCallback = async (req, res) => {
     }
 
     const [userId, source] = state.split(":");
-    console.log("👤 User ID:", userId);
-    console.log("📱 Source:", source);
 
     // 1️⃣ Exchange code → user access token
     console.log("🔄 Exchanging code for access token...");
@@ -465,11 +485,6 @@ export const instagramCallback = async (req, res) => {
         continue;
       }
 
-      console.log("✅ IG business account found:", ig.id);
-
-      // 4️⃣ Get IG profile
-      console.log("👤 Fetching IG profile details...");
-
       const profileRes = await axios.get(
         `https://graph.facebook.com/v20.0/${ig.id}`,
         {
@@ -480,9 +495,6 @@ export const instagramCallback = async (req, res) => {
         }
       );
 
-      console.log("📸 IG Profile:", profileRes.data);
-
-      // 5️⃣ Save to DB
       console.log("💾 Saving Instagram account to DB...");
 
       await SocialAccount.findOneAndUpdate(

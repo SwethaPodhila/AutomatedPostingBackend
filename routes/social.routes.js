@@ -38,6 +38,8 @@ router.post("/ai-generate", controller.generateAICaption);
 router.get("/pages/:userId", controller.getPages);   // <-- new API
 router.get("/metrics/:pageId", controller.metrics);
 
+router.get("/instagram/account/:userId", controller.getInstagramAccounts);
+
 // DELETE a specific platform (facebook / instagram)
 router.post("/:platform/disconnect", controller.disconnectAccount);
 
