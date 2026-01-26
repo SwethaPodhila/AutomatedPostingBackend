@@ -5,7 +5,7 @@ import SocialAccount from "../models/socialAccount.js";
 //import fbApi from "../utils/FbApis.js";
 import * as fbApi from "../utils/FbApis.js";
 import axios from "axios";
-import fs from "fs"; 
+import fs from "fs";
 import multer from "multer";
 import { publishToPage } from "../utils/FbApis.js";
 import PostedPost from "../models/manualPosts.js";
@@ -357,33 +357,33 @@ export const disconnectAccount = async (req, res) => {
   }
 };
 
-//instagram metrics connection callback 
+// 🔁 INSTAGRAM AUTH REDIRECT (WEB + ANDROID)
 export const instagramAuthRedirect = (req, res) => {
-  console.log("🔥 INSTAGRAM AUTH REDIRECT HIT 🔥");
-
-  const { userId } = req.query;
-  console.log("userId:", userId);
+  const { userId, source } = req.query;
+  if (!userId) return res.status(400).send("Missing userId");
 
   const redirectUri =
     "https://automatedpostingbackend-h9dc.onrender.com/social/instagram/callback";
-
-  console.log("redirectUri:", redirectUri);
 
   const scopes = [
     "instagram_basic",
     "instagram_content_publish",
     "pages_show_list",
-    "pages_read_engagement"
+    "pages_read_engagement",
   ];
+
+  // 👇 SAME PATTERN AS FACEBOOK
+  const state = `${userId}:${source || "web"}`;
 
   const url =
     `https://www.facebook.com/v20.0/dialog/oauth` +
     `?client_id=${process.env.FB_APP_ID}` +
     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&state=${encodeURIComponent(userId)}` +
-    `&scope=${scopes.join(",")}`;
+    `&state=${encodeURIComponent(state)}` +
+    `&scope=${scopes.join(",")}` +
+    `&auth_type=rerequest`;
 
-  console.log("FB AUTH URL:", url);
+  console.log("📸 INSTAGRAM AUTH URL:", url);
 
   return res.redirect(url);
 };
@@ -391,76 +391,91 @@ export const instagramAuthRedirect = (req, res) => {
 export const instagramCallback = async (req, res) => {
   try {
     const { code, state } = req.query;
-    const userId = decodeURIComponent(state);
+    if (!code || !state) return res.status(400).send("Invalid callback");
 
-    if (!code) return res.status(400).send("Missing code");
+    // 👇 SAME LOGIC AS FACEBOOK
+    const [userId, source] = state.split(":");
 
-    // Exchange code → token
+    console.log("📸 IG Callback for user:", userId, "source:", source);
+
+    // 1️⃣ Exchange code → user access token
     const tokenRes = await axios.get(
       "https://graph.facebook.com/v20.0/oauth/access_token",
       {
         params: {
           client_id: process.env.FB_APP_ID,
           client_secret: process.env.FB_APP_SECRET,
-          redirect_uri: "https://automatedpostingbackend-h9dc.onrender.com/social/instagram/callback",
-          code
-        }
+          redirect_uri:
+            "https://automatedpostingbackend-h9dc.onrender.com/social/instagram/callback",
+          code,
+        },
       }
     );
 
     const userAccessToken = tokenRes.data.access_token;
+    if (!userAccessToken) throw new Error("Access token missing");
 
-    // Get pages
+    // 2️⃣ Get pages
     const pagesRes = await axios.get(
       "https://graph.facebook.com/v20.0/me/accounts",
       { params: { access_token: userAccessToken } }
     );
 
     for (const page of pagesRes.data.data) {
-      // Get IG business account
+      // 3️⃣ Get IG business account
       const igRes = await axios.get(
         `https://graph.facebook.com/v20.0/${page.id}`,
         {
           params: {
             fields: "instagram_business_account",
-            access_token: page.access_token
-          }
+            access_token: page.access_token,
+          },
         }
       );
 
       const ig = igRes.data.instagram_business_account;
       if (!ig) continue;
 
-      // Get IG profile
-      const profile = await axios.get(
+      // 4️⃣ Get IG profile
+      const profileRes = await axios.get(
         `https://graph.facebook.com/v20.0/${ig.id}`,
         {
           params: {
             fields: "username,profile_picture_url",
-            access_token: page.access_token
-          }
+            access_token: page.access_token,
+          },
         }
       );
 
       await SocialAccount.findOneAndUpdate(
-        { user: userId, platform: "instagram" },
+        { user: userId, platform: "instagram", providerId: ig.id },
         {
           user: userId,
           platform: "instagram",
           providerId: ig.id,
           accessToken: page.access_token,
+          connectedFrom: source || "web",
           meta: {
-            username: profile.data.username,
-            picture: profile.data.profile_picture_url
-          }
+            username: profileRes.data.username,
+            picture: profileRes.data.profile_picture_url,
+            pageId: page.id,
+            pageName: page.name,
+          },
         },
         { upsert: true, new: true }
       );
+
+      console.log(`✅ Instagram account saved: ${profileRes.data.username}`);
+    }
+
+    // 5️⃣ FINAL REDIRECT (🔥 IMPORTANT)
+    if (source === "android") {
+      return res.redirect("com.wingspan.aimediahub://instagram-success");
     }
 
     return res.redirect(`${process.env.FRONTEND_URL}/instagram-dashboard`);
   } catch (err) {
-    console.error("IG CALLBACK ERROR:", err.response?.data || err.message);
+    console.error("❌ IG CALLBACK ERROR:", err.response?.data || err.message);
     return res.status(500).send("Instagram callback failed");
   }
 };
