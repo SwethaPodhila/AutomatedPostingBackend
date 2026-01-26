@@ -388,6 +388,7 @@ export const instagramAuthRedirect = (req, res) => {
   return res.redirect(url);
 };
 
+
 export const instagramCallback = async (req, res) => {
   try {
     const { code, state } = req.query;
@@ -479,6 +480,7 @@ export const instagramCallback = async (req, res) => {
     return res.status(500).send("Instagram callback failed");
   }
 };
+
 
 const waitForVideoProcessing = async (creationId, accessToken) => {
   let status = "IN_PROGRESS";
