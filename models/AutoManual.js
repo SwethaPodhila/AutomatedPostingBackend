@@ -9,7 +9,7 @@ const AutoManual = new mongoose.Schema(
 
     platform: {
       type: String,
-      enum: ["facebook", "instagram","linkedin", "twitter","telegram","pinterest"],
+      enum: ["facebook", "instagram","linkedin", "twitter","telegram","pinterest","bluesky"],
       required: true,
     },
 

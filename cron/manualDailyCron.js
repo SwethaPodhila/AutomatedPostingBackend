@@ -8,6 +8,7 @@ import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
 import { postToTelegram } from "../utils/telegram.js"
 import { publishToPinterest } from "../utils/pinterest.js";
+import { publishToBlueskyWithImage } from "../utils/publishToBluesky.js";
 
 import Automation from "../models/Automation.js";
 import { generateAICaptionAndImage } from "../utils/aiAutomation.js";
@@ -110,6 +111,19 @@ cron.schedule("* * * * *", async () => {
             chatId: post.pageId,
             message: post.message,
             mediaUrl: post.mediaUrl || null,
+          });
+        }
+
+        // ✅ ADD BLUESKY
+        if (post.platform === "bluesky") {
+          await publishToBlueskyWithImage({
+            service: acc.meta?.service || "https://bsky.social",
+            handle: acc.meta?.handle,
+            accessJwt: acc.accessToken,
+            refreshJwt: acc.refreshToken,
+            did: acc.providerId,
+            message: post.message,
+            imageUrl: post.mediaUrl,
           });
         }
 
@@ -228,6 +242,19 @@ cron.schedule("* * * * *", async () => {
             chatId: auto.pageId,
             message: caption,
             mediaUrl: mediaUrl || null,
+          });
+        }
+
+        // aDD BLUESKY
+        if (auto.platform === "bluesky") {
+          await publishToBlueskyWithImage({
+            service: acc.meta?.service || "https://bsky.social",
+            handle: acc.meta?.handle,
+            accessJwt: acc.accessToken,
+            refreshJwt: acc.refreshToken,
+            did: acc.providerId,
+            message: caption,
+            imageUrl: mediaUrl,
           });
         }
 

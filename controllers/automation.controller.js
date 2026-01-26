@@ -9,6 +9,7 @@ import { publishInstagramUtil } from "../utils/instagramApi.js";
 import { publishToLinkedIn } from "../utils/linkedinApi.js";
 import { postToTelegram } from "../utils/telegram.js";
 import { publishToPinterest } from "../utils/pinterest.js";
+import { publishToBlueskyWithImage } from "../utils/publishToBluesky.js";
 
 export const getUserAccounts = async (req, res) => {
   try {
@@ -335,6 +336,102 @@ export const universalPublish = async (req, res) => {
       return res.json({ success: true, platform: "telegram" });
     }
 
+    // ================= BLUESKY =================
+    if (platform === "bluesky") {
+
+      console.log("🔵 ENTERED BLUESKY BLOCK");
+      console.log("📦 REQ.FILE:", req.file);
+      console.log("📝 MESSAGE:", message);
+      console.log("📅 START:", normalizedStartDate);
+      console.log("📅 END:", normalizedEndDate);
+      console.log("⏰ TIMES:", parsedTimes);
+
+      const acc = await SocialAccount.findOne({
+        user: userId,
+        platform: "bluesky",
+      });
+
+      console.log("🔑 BLUESKY ACCOUNT:", acc ? "FOUND" : "NOT FOUND");
+
+      if (!acc) {
+        return res.status(400).json({ error: "Bluesky account not connected" });
+      }
+
+      const media = req.file || null;
+
+      // ================= IMMEDIATE =================
+      if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
+
+        console.log("⚡ BLUESKY IMMEDIATE MODE");
+
+        let postRes;
+
+        try {
+          if (media) {
+            console.log("🖼️ IMAGE POST");
+
+            postRes = await publishToBlueskyWithImage({
+              service: acc.meta?.service,
+              did: acc.providerId,
+              accessJwt: acc.accessToken,
+              refreshJwt: acc.refreshToken,
+              message,
+              imageUrl: media.path, // Cloudinary URL
+            });
+
+          } else {
+            console.log("📝 TEXT POST");
+
+            postRes = await publishToBluesky({
+              service: acc.meta?.service,
+              did: acc.providerId,
+              accessJwt: acc.accessToken,
+              refreshJwt: acc.refreshToken,
+              message,
+            });
+          }
+
+          console.log("✅ BLUESKY POSTED:", postRes?.uri);
+
+          await AutoManual.create({
+            user: userId,
+            platform: "bluesky",
+            pageId: acc.providerId,
+            message,
+            mediaUrl: media?.path || null,
+            postId: postRes.uri,
+            status: "posted",
+          });
+
+          console.log("💾 DB SAVED (POSTED)");
+
+        } catch (err) {
+          console.error("❌ BLUESKY ERROR:", err);
+          return res.status(500).json({ error: "Bluesky post failed" });
+        }
+      }
+
+      // ================= SCHEDULE =================
+      else {
+        console.log("⏰ BLUESKY SCHEDULE MODE");
+
+        await AutoManual.create({
+          user: userId,
+          platform: "bluesky",
+          pageId: acc.providerId,
+          message,
+          mediaUrl: media?.path || null,
+          startDate: normalizedStartDate,
+          endDate: normalizedEndDate,
+          times: parsedTimes,
+          status: "scheduled",
+        });
+
+        console.log("💾 DB SAVED (SCHEDULED)");
+      }
+
+      return res.json({ success: true, platform: "bluesky" });
+    }
 
     // ================= PINTEREST =================
     if (platform === "pinterest") {

@@ -3,8 +3,8 @@ const SocialAccount = require("../models/socialAccount");
 
 exports.connectBluesky = async (req, res) => {
     try {
-        const { handle, appPassword } = req.body;
-        const userId = req.user.id;
+        const { handle, appPassword ,userId } = req.body;
+       // const userId = req.user.id;
 
         if (!handle || !appPassword) {
             return res.status(400).json({ message: "Missing credentials" });
@@ -37,7 +37,7 @@ exports.connectBluesky = async (req, res) => {
             scopes: ["post", "read", "metrics"],
             meta: {
                 handle,
-                displayName: profile.data.displayName,
+                username: profile.data.displayName,
                 avatar: profile.data.avatar,
                 service: "https://bsky.social",
                 connectedVia: "app-password",

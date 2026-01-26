@@ -11,7 +11,7 @@ const AutomationSchema = new mongoose.Schema(
 
     platform: {
       type: String,
-      enum: ["facebook", "instagram", "linkedin", "twitter","pinterest","telegram"],
+      enum: ["facebook", "instagram", "linkedin", "twitter","pinterest","telegram","bluesky"],
       required: true,
     },
 

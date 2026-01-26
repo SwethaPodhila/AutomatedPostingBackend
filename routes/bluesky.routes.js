@@ -1,8 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const { connectBluesky } = require("../controllers/blueskyController");
-const authMiddleware = require("../middlewares/auth");
+const { connectBluesky } = require("../controllers/bluesky.controller");
 
-router.post("/connect", authMiddleware, connectBluesky);
+router.post("/connect", connectBluesky);
 
 module.exports = router;

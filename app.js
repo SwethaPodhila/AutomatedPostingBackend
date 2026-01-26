@@ -17,6 +17,7 @@ import youtubeRoutes from './routes/youtube.routes.js';
 import pinterestRoutes from "./routes/pinterest.routes.js";
 import TelegramRoutes from "./routes/telegram.routes.js";
 import paymentRoutes from "./routes/payment.routes.js";
+import BlueskyRoutes from "./routes/bluesky.routes.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -101,6 +102,7 @@ app.use("/social", socialRoutes);
 app.use("/automation", automationRoutes);
 app.use("/pinterest", pinterestRoutes)
 app.use("/telegram", TelegramRoutes)
+app.use("/bluesky", BlueskyRoutes);
 
 // ONLY webhook route uses raw body
 app.use(
