@@ -12,6 +12,7 @@ import { publishToBlueskyWithImage } from "../utils/publishToBluesky.js";
 
 import Automation from "../models/Automation.js";
 import { generateAICaptionAndImage } from "../utils/aiAutomation.js";
+import PublishedPost from "../models/PublishedPost.js";
 import fs from "fs";
 
 // 🔁 Runs every minute
@@ -75,12 +76,47 @@ cron.schedule("* * * * *", async () => {
 
         // 4️⃣ Publish
         if (post.platform === "facebook") {
-          await publishToPage({
+          const fbRes = await publishToPage({
             pageAccessToken: acc.accessToken,
             pageId: post.pageId,
             message: post.message,
             mediaUrl: post.mediaUrl,
             mediaType: post.mediaType,
+          });
+
+          // 🔑 ALWAYS store PAGEID_POSTID
+          const rawPostId = fbRes?.id;
+          const postId = rawPostId.includes("_")
+            ? rawPostId
+            : `${post.pageId}_${rawPostId}`;
+
+          // after publishing
+          let videoId = null;
+          if (post.mediaType === "video") {
+            const attRes = await fetch(
+              `https://graph.facebook.com/v18.0/${postId}/attachments?access_token=${acc.accessToken}`
+            );
+            const attData = await attRes.json();
+            videoId = attData?.data?.[0]?.media?.video?.id || null;
+          }
+
+          // SAVE
+          await PublishedPost.create({
+            user: post.user,
+            platform: "facebook",
+            pageId: post.pageId,
+            pageName: acc.meta?.username || "",
+            caption: post.message,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaType,
+            postId,
+            videoId, // 👈 now it can store the real video ID
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: post.scheduledTime || null,
+            source: "scheduled",
+            status: "published",
+            analyticsStatus: "pending",
           });
         }
 

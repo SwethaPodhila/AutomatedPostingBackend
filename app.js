@@ -27,6 +27,7 @@ import multer from "multer";
 //import "./cron/automation.cron.js";
 // server.js
 import "./cron/manualDailyCron.js";
+import "./cron/analyticsCron.js";
 
 
 import {
