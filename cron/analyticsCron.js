@@ -10,8 +10,8 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected for analytics cron"));
 
-cron.schedule("*/2 * * * *", async () => {
-  console.log("🔄 Analytics cron running...");
+cron.schedule("0 * * * *", async () => {
+  console.log("🔄 Analytics cron running (every 1 hour)...");
 
   const posts = await PublishedPost.find({
     status: "published",
@@ -36,8 +36,7 @@ cron.schedule("*/2 * * * *", async () => {
 
       await post.save();
 
-      //console.log("📊 Analytics updated:", post.postId);
-
+      // Optional delay to avoid rate limits
       await new Promise(r => setTimeout(r, 300));
     } catch (err) {
       console.error("❌ Analytics error:", err.message);

@@ -6,8 +6,8 @@ const PageAnalytics = require("../models/PageAnalytics.js");
 // Only the two page-level metrics
 const PAGE_METRICS = ["page_post_engagements", "page_views_total"];
 
-cron.schedule("*/2 * * * *", async () => {
-  console.log("📊 Page-level daily analytics cron started");
+cron.schedule("0 */6 * * *", async () => {
+  console.log("📊 Page-level daily analytics cron started (every 6 hours)");
 
   try {
     // Fetch all connected Facebook pages
@@ -25,7 +25,7 @@ cron.schedule("*/2 * * * *", async () => {
             {
               params: {
                 metric,
-                period: "day", // ✅ daily metrics
+                period: "day",
                 access_token: page.accessToken,
               },
             }
