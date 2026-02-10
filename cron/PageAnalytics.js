@@ -3,70 +3,68 @@ const axios = require("axios");
 const SocialAccount = require("../models/socialAccount.js");
 const PageAnalytics = require("../models/PageAnalytics.js");
 
-const METRIC_GROUPS = {
-  followers: "page_fans",
-  impressions: "page_impressions",
-  reach: "page_impressions_unique",
-  engagement: "page_engaged_users",
-};
+// Only the two page-level metrics
+const PAGE_METRICS = ["page_post_engagements", "page_views_total"];
 
 cron.schedule("*/2 * * * *", async () => {
-  console.log("📊 Page analytics cron started");
+  console.log("📊 Page-level daily analytics cron started");
 
-  const pages = await SocialAccount.find({ platform: "facebook" });
+  try {
+    // Fetch all connected Facebook pages
+    const pages = await SocialAccount.find({ platform: "facebook" });
 
-  for (const page of pages) {
-    const today = new Date().toISOString().split("T")[0];
+    for (const page of pages) {
+      const today = new Date().toISOString().split("T")[0];
 
-    let analytics = {
-      followers: 0,
-      impressions: 0,
-      reach: 0,
-      engagement: 0,
-    };
+      let analytics = {};
 
-    for (const [key, metric] of Object.entries(METRIC_GROUPS)) {
+      for (const metric of PAGE_METRICS) {
+        try {
+          const res = await axios.get(
+            `https://graph.facebook.com/v19.0/${page.providerId}/insights`,
+            {
+              params: {
+                metric,
+                period: "day", // ✅ daily metrics
+                access_token: page.accessToken,
+              },
+            }
+          );
+
+          analytics[metric] =
+            res.data?.data?.[0]?.values?.[0]?.value || 0;
+        } catch (err) {
+          console.error(
+            `⚠️ Failed fetching metric (${metric}) for page ${page.providerId}:`,
+            err.response?.data || err.message
+          );
+          analytics[metric] = 0; // fallback to 0
+        }
+      }
+
+      // Save analytics to DB
       try {
-        const res = await axios.get(
-          `https://graph.facebook.com/v18.0/${page.providerId}/insights`,
+        await PageAnalytics.updateOne(
           {
-            params: {
-              metric,
-              period: "day",
-              access_token: page.accessToken,
+            socialAccount: page._id,
+            providerId: page.providerId,
+            date: today,
+          },
+          {
+            $set: {
+              platform: "facebook",
+              ...analytics,
             },
-          }
+          },
+          { upsert: true }
         );
 
-        analytics[key] =
-          res.data?.data?.[0]?.values?.[0]?.value || 0;
+        console.log(`✅ Saved daily analytics for page ${page.providerId}`);
       } catch (err) {
-        console.error(
-          `⚠️ Metric failed (${metric}) for page ${page.providerId}:`,
-          err.response?.data || err.message
-        );
+        console.error("❌ DB save error for page", page.providerId, err.message);
       }
     }
-
-    try {
-      await PageAnalytics.updateOne(
-        {
-          socialAccount: page._id,
-          providerId: page.providerId,
-          date: today,
-        },
-        {
-          $set: {
-            platform: "facebook",
-            ...analytics,
-          },
-        },
-        { upsert: true }
-      );
-
-      console.log(`✅ Saved analytics for page ${page.providerId}`);
-    } catch (err) {
-      console.error("❌ DB save error:", err.message);
-    }
+  } catch (err) {
+    console.error("❌ Cron error:", err.message);
   }
 });

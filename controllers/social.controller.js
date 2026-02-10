@@ -12,7 +12,6 @@ import PostedPost from "../models/manualPosts.js";
 import schedule from "node-schedule";
 import PageAnalytics from "../models/PageAnalytics.js";
 
-
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL, ANDROID_REDIRECT_URI } = process.env;
 
 // controllers/facebookAuth.js
@@ -381,22 +380,29 @@ export const disconnectAccount = async (req, res) => {
       });
     }
 
-    // delete connected account(s)
-    const result = await SocialAccount.deleteMany({
-      user: userId,
-      platform,
-    });
+    // 1️⃣ Find all connected accounts first
+    const accounts = await SocialAccount.find({ user: userId, platform });
 
-    if (result.deletedCount === 0) {
+    if (!accounts.length) {
       return res.json({
         success: false,
         msg: "No account found to disconnect",
       });
     }
 
+    // 2️⃣ Delete related PageAnalytics
+    const socialIds = accounts.map(a => a._id);
+    await PageAnalytics.deleteMany({ socialAccount: { $in: socialIds } });
+
+    // 3️⃣ Delete SocialAccount(s)
+    const result = await SocialAccount.deleteMany({
+      user: userId,
+      platform,
+    });
+
     return res.json({
       success: true,
-      msg: `${platform} disconnected successfully`,
+      msg: `${platform} disconnected successfully, related analytics removed`,
     });
   } catch (err) {
     console.error("DISCONNECT ERROR:", err.message);
@@ -406,6 +412,7 @@ export const disconnectAccount = async (req, res) => {
     });
   }
 };
+
 
 // 🔁 INSTAGRAM AUTH REDIRECT (WEB + ANDROID)
 export const instagramAuthRedirect = (req, res) => {
