@@ -3,54 +3,70 @@ const axios = require("axios");
 const SocialAccount = require("../models/socialAccount.js");
 const PageAnalytics = require("../models/PageAnalytics.js");
 
-cron.schedule("*/3 * * * *", async () => {
-    console.log(" Page analytics cron started");
+const METRIC_GROUPS = {
+  followers: "page_fans",
+  impressions: "page_impressions",
+  reach: "page_impressions_unique",
+  engagement: "page_engaged_users",
+};
 
-    const pages = await SocialAccount.find({
-        platform: "facebook",
-    });
+cron.schedule("*/2 * * * *", async () => {
+  console.log("📊 Page analytics cron started");
 
-    for (let page of pages) {
-        try {
-            const today = new Date().toISOString().split("T")[0];
+  const pages = await SocialAccount.find({ platform: "facebook" });
 
-            const url = `https://graph.facebook.com/v18.0/${page.providerId}/insights`;
-            const metrics = [
-                "page_fans",
-                "page_impressions",
-                "page_impressions_unique",
-                "page_engaged_users",
-            ].join(",");
+  for (const page of pages) {
+    const today = new Date().toISOString().split("T")[0];
 
-            const response = await axios.get(url, {
-                params: {
-                    metric: metrics,
-                    access_token: page.accessToken,
-                },
-            });
+    let analytics = {
+      followers: 0,
+      impressions: 0,
+      reach: 0,
+      engagement: 0,
+    };
 
-            const data = response.data.data;
+    for (const [key, metric] of Object.entries(METRIC_GROUPS)) {
+      try {
+        const res = await axios.get(
+          `https://graph.facebook.com/v18.0/${page.providerId}/insights`,
+          {
+            params: {
+              metric,
+              period: "day",
+              access_token: page.accessToken,
+            },
+          }
+        );
 
-            const analytics = {
-                socialAccount: page._id,
-                providerId: page.providerId,
-                platform: "facebook",
-                followers: data[0]?.values[0]?.value || 0,
-                impressions: data[1]?.values[0]?.value || 0,
-                reach: data[2]?.values[0]?.value || 0,
-                engagement: data[3]?.values[0]?.value || 0,
-                date: today,
-            };
-
-            await PageAnalytics.updateOne(
-                { socialAccount: page._id, date: today },
-                { $set: analytics },
-                { upsert: true }
-            );
-
-            console.log(`✅ Saved analytics for page ${page.providerId}`);
-        } catch (err) {
-            console.error("❌ Analytics error:", err.message);
-        }
+        analytics[key] =
+          res.data?.data?.[0]?.values?.[0]?.value || 0;
+      } catch (err) {
+        console.error(
+          `⚠️ Metric failed (${metric}) for page ${page.providerId}:`,
+          err.response?.data || err.message
+        );
+      }
     }
+
+    try {
+      await PageAnalytics.updateOne(
+        {
+          socialAccount: page._id,
+          providerId: page.providerId,
+          date: today,
+        },
+        {
+          $set: {
+            platform: "facebook",
+            ...analytics,
+          },
+        },
+        { upsert: true }
+      );
+
+      console.log(`✅ Saved analytics for page ${page.providerId}`);
+    } catch (err) {
+      console.error("❌ DB save error:", err.message);
+    }
+  }
 });
