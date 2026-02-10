@@ -84,23 +84,12 @@ cron.schedule("* * * * *", async () => {
             mediaType: post.mediaType,
           });
 
-          // 🔑 ALWAYS store PAGEID_POSTID
-          const rawPostId = fbRes?.id;
-          const postId = rawPostId.includes("_")
-            ? rawPostId
-            : `${post.pageId}_${rawPostId}`;
+          const rawId = fbRes.id;
 
-          // after publishing
-          let videoId = null;
-          if (post.mediaType === "video") {
-            const attRes = await fetch(
-              `https://graph.facebook.com/v18.0/${postId}/attachments?access_token=${acc.accessToken}`
-            );
-            const attData = await attRes.json();
-            videoId = attData?.data?.[0]?.media?.video?.id || null;
-          }
+          const postId = rawId.includes("_")
+            ? rawId
+            : `${post.pageId}_${rawId}`;
 
-          // SAVE
           await PublishedPost.create({
             user: post.user,
             platform: "facebook",
@@ -109,8 +98,10 @@ cron.schedule("* * * * *", async () => {
             caption: post.message,
             mediaUrl: post.mediaUrl,
             mediaType: post.mediaType,
-            postId,
-            videoId, // 👈 now it can store the real video ID
+
+            postId,      // ✅ ALWAYS SAVE
+            videoId: null, // ❌ NOT NEEDED
+
             isPaid: false,
             publishedAt: new Date(),
             scheduledAt: post.scheduledTime || null,
@@ -121,14 +112,42 @@ cron.schedule("* * * * *", async () => {
         }
 
         if (post.platform === "instagram") {
-          await publishInstagramUtil({
+
+          const igRes = await publishInstagramUtil({
             igUserId: acc.providerId,
             accessToken: acc.accessToken,
             mediaUrl: post.mediaUrl,
             mediaType: post.mediaType,
             caption: post.message,
           });
+
+          console.log("🧪 IG POST ID:", igRes.postId);
+
+          await PublishedPost.create({
+            user: post.user,
+            platform: "instagram",
+
+            pageId: acc.providerId,                 // IG user id
+            pageName: acc.meta?.username || "",
+
+            caption: post.message,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaType,
+
+            postId: igRes.postId,                   // ✅ NOW REAL VALUE
+            videoId: post.mediaType === "video" ? igRes.postId : null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: post.scheduledTime || null,
+            source: "scheduled",
+            status: "published",
+            analyticsStatus: "pending",
+          });
+
+          console.log("✅ Instagram post saved to DB");
         }
+
 
         if (post.platform === "linkedin") {
           await publishToLinkedIn({

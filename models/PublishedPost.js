@@ -51,13 +51,11 @@ const PublishedPostSchema = new mongoose.Schema(
     // 🔑 PLATFORM POST ID (VERY IMPORTANT)
     postId: {
       type: String,
-      required: true,
-      index: true,
+      required: false,   // 👈 IMPORTANT
     },
-
     videoId: {
       type: String,
-      index: true,
+      required: false,
     },
 
     isPaid: {

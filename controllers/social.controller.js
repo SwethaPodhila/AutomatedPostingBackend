@@ -10,6 +10,8 @@ import multer from "multer";
 import { publishToPage } from "../utils/FbApis.js";
 import PostedPost from "../models/manualPosts.js";
 import schedule from "node-schedule";
+import PageAnalytics from "../models/PageAnalytics.js";
+
 
 const { FB_APP_ID, FB_APP_SECRET, FB_REDIRECT_URI, FRONTEND_URL, ANDROID_REDIRECT_URI } = process.env;
 
@@ -118,12 +120,14 @@ export const callback = async (req, res) => {
     console.log("📘 ALL CONNECTED PAGES:", allPages);
 
     // 7️⃣ SAVE PAGES
+    // 7️⃣ SAVE PAGES + INIT ANALYTICS
     for (const page of allPages) {
       try {
         const pictureUrl = await fbApi.getPagePicture(page.id, page.access_token);
         const igAccount = await fbApi.getInstagramBusinessAccount(page.id, page.access_token);
 
-        await SocialAccount.findOneAndUpdate(
+        // ✅ Save / Update SocialAccount
+        const socialAccount = await SocialAccount.findOneAndUpdate(
           { user: userId, platform: "facebook", providerId: page.id },
           {
             user: userId,
@@ -142,7 +146,30 @@ export const callback = async (req, res) => {
           },
           { upsert: true, new: true }
         );
-        console.log(`✅ Saved page ${page.name} (${page.id})`);
+
+        // ✅ INIT PAGE ANALYTICS (🔥 THIS IS THE KEY)
+        const today = new Date().toISOString().split("T")[0];
+
+        await PageAnalytics.findOneAndUpdate(
+          {
+            socialAccount: socialAccount._id,
+            providerId: page.id,
+            date: today,
+          },
+          {
+            $setOnInsert: {
+              platform: "facebook",
+              followers: 0,
+              impressions: 0,
+              reach: 0,
+              engagement: 0,
+              createdAt: new Date(),
+            },
+          },
+          { upsert: true }
+        );
+
+        console.log(`✅ Saved page + analytics ${page.name} (${page.id})`);
       } catch (err) {
         console.error(`❌ Error saving page ${page.id}:`, err.response?.data || err.message);
       }

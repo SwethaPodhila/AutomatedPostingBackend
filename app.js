@@ -28,6 +28,7 @@ import multer from "multer";
 // server.js
 import "./cron/manualDailyCron.js";
 import "./cron/analyticsCron.js";
+import "./cron/PageAnalytics.js";
 
 
 import {
@@ -268,7 +269,6 @@ app.post("/api/youtube/upload", upload.single("media"), uploadYouTubeVideo);
 app.post("/api/youtube/disconnect", disconnectYouTube);
 
 
-
 // =========================
 //  📌 HEALTH
 // =========================
@@ -330,8 +330,6 @@ app.get('/force-android/:userId', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 // =========================
 //  🚀 START SERVER

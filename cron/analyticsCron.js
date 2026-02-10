@@ -18,22 +18,29 @@ cron.schedule("*/2 * * * *", async () => {
   });
 
   for (const post of posts) {
+    if (!post.postId) continue;
+
     try {
       const analytics = await fetchAnalyticsForPost(post);
 
-      post.analytics = analytics;
-      post.analyticsStatus = "synced";
+      if (!analytics) continue;
+
+      // 🔥 ALWAYS PUSH LATEST ANALYTICS
+      post.analytics = {
+        ...post.analytics,
+        ...analytics,
+      };
+
       post.lastAnalyticsSyncAt = new Date();
+      post.analyticsStatus = "synced"; // optional, for UI only
 
       await post.save();
 
-      console.log("✅ Analytics saved:", post.postId);
+      //console.log("📊 Analytics updated:", post.postId);
+
+      await new Promise(r => setTimeout(r, 300));
     } catch (err) {
-      post.analyticsStatus = "failed";
-      post.errorMessage = err.message;
-      await post.save();
-
-      console.error("❌ Analytics failed:", err.message);
+      console.error("❌ Analytics error:", err.message);
     }
   }
 });

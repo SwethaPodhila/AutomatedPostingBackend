@@ -154,23 +154,7 @@ export const login = async (req, res) => {
         if (!isMatch)
             return res.json({ msg: "Invalid password", success: false });
 
-        // 🔥 7 DAYS FREE TRIAL CHECK (using createdAt)
-        if (user.plan === "FREE") {
-            const trialEnd =
-                new Date(user.createdAt).getTime() +
-                7 * 24 * 60 * 60 * 1000;
-
-            if (Date.now() > trialEnd) {
-                user.subscriptionStatus = "INACTIVE";
-                await user.save();
-
-                return res.json({
-                    success: false,
-                    msg: "Your 7 days free trial is completed. Please upgrade."
-                });
-            }
-        }
-
+       
         // 🔑 JWT token with plan info
         const token = jwt.sign(
             {
