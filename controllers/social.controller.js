@@ -31,7 +31,8 @@ export const authRedirect = (req, res) => {
     "pages_manage_metadata",
     "public_profile",
     "email",
-    "read_insights"
+    "read_insights",
+    "instagram_manage_insights"
   ];
 
   const redirectUri = FB_REDIRECT_URI;
