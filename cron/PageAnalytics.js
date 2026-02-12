@@ -3,65 +3,138 @@ const axios = require("axios");
 const SocialAccount = require("../models/socialAccount.js");
 const PageAnalytics = require("../models/PageAnalytics.js");
 
-// Only the two page-level metrics
-const PAGE_METRICS = ["page_post_engagements", "page_views_total"];
+// Facebook metrics (daily)
+const FB_METRICS = ["page_post_engagements", "page_views_total"];
 
-cron.schedule("0 */6 * * *", async () => {
-  console.log("📊 Page-level daily analytics cron started (every 6 hours)");
+// Instagram metrics
+const IG_DAILY_METRICS = ["reach","follower_count"];
+const IG_LIFETIME_METRICS = ["online_followers"];
+
+// Run every 3 minutes
+cron.schedule("*/8 * * * *", async () => {
+  console.log("📊 FB + IG analytics cron started (every 3 minutes)");
 
   try {
-    // Fetch all connected Facebook pages
-    const pages = await SocialAccount.find({ platform: "facebook" });
+    const accounts = await SocialAccount.find({
+      platform: { $in: ["facebook", "instagram"] },
+    });
 
-    for (const page of pages) {
+    for (const account of accounts) {
       const today = new Date().toISOString().split("T")[0];
-
       let analytics = {};
 
-      for (const metric of PAGE_METRICS) {
-        try {
-          const res = await axios.get(
-            `https://graph.facebook.com/v19.0/${page.providerId}/insights`,
-            {
-              params: {
-                metric,
-                period: "day",
-                access_token: page.accessToken,
-              },
-            }
-          );
+      // =========================
+      // FACEBOOK ANALYTICS
+      // =========================
+      if (account.platform === "facebook") {
+        for (const metric of FB_METRICS) {
+          try {
+            const res = await axios.get(
+              `https://graph.facebook.com/v19.0/${account.providerId}/insights`,
+              {
+                params: {
+                  metric,
+                  period: "day",
+                  access_token: account.accessToken,
+                },
+              }
+            );
 
-          analytics[metric] =
-            res.data?.data?.[0]?.values?.[0]?.value || 0;
-        } catch (err) {
-          console.error(
-            `⚠️ Failed fetching metric (${metric}) for page ${page.providerId}:`,
-            err.response?.data || err.message
-          );
-          analytics[metric] = 0; // fallback to 0
+            analytics[metric] =
+              res.data?.data?.[0]?.values?.[0]?.value || 0;
+          } catch (err) {
+            console.error(
+              `⚠️ FB metric failed (${metric})`,
+              err.response?.data || err.message
+            );
+            analytics[metric] = 0;
+          }
         }
       }
 
-      // Save analytics to DB
+      // =========================
+      // INSTAGRAM ANALYTICS
+      // =========================
+      if (account.platform === "instagram") {
+        // DAILY METRICS
+        for (const metric of IG_DAILY_METRICS) {
+          try {
+            const res = await axios.get(
+              `https://graph.facebook.com/v19.0/${account.providerId}/insights`,
+              {
+                params: {
+                  metric,
+                  period: "day",
+                  access_token: account.accessToken,
+                },
+              }
+            );
+
+            analytics[metric] =
+              res.data?.data?.[0]?.values?.[0]?.value || 0;
+          } catch (err) {
+            console.error(
+              `⚠️ IG daily metric failed (${metric})`,
+              err.response?.data || err.message
+            );
+            analytics[metric] = 0;
+          }
+        }
+
+        // LIFETIME METRICS
+        for (const metric of IG_LIFETIME_METRICS) {
+          try {
+            const res = await axios.get(
+              `https://graph.facebook.com/v19.0/${account.providerId}/insights`,
+              {
+                params: {
+                  metric,
+                  period: "lifetime",
+                  access_token: account.accessToken,
+                },
+              }
+            );
+
+            analytics[metric] =
+              res.data?.data?.[0]?.values?.[0]?.value || 0;
+          } catch (err) {
+            console.error(
+              `⚠️ IG lifetime metric failed (${metric})`,
+              err.response?.data || err.message
+            );
+            analytics[metric] = 0;
+          }
+        }
+      }
+
+      // =========================
+      // SAVE TO DB
+      // =========================
       try {
         await PageAnalytics.updateOne(
           {
-            socialAccount: page._id,
-            providerId: page.providerId,
+            socialAccount: account._id,
+            providerId: account.providerId,
             date: today,
           },
           {
             $set: {
-              platform: "facebook",
+              platform: account.platform,
               ...analytics,
             },
           },
           { upsert: true }
         );
 
-        console.log(`✅ Saved daily analytics for page ${page.providerId}`);
+        console.log(
+          `✅ Saved ${account.platform} analytics for ${account.providerId}`
+        );
       } catch (err) {
-        console.error("❌ DB save error for page", page.providerId, err.message);
+        console.error(
+          "❌ DB save error for",
+          account.providerId,
+          err.message
+        );
       }
     }
   } catch (err) {

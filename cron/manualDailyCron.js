@@ -159,15 +159,55 @@ cron.schedule("* * * * *", async () => {
           });
         }
 
-        // ✅ ADD THIS
         if (post.platform === "telegram") {
-          await postToTelegram({
+
+          const tgRes = await postToTelegram({
             botToken: acc.accessToken,
             chatId: post.pageId,
             message: post.message,
             mediaUrl: post.mediaUrl || null,
           });
+
+          if (!tgRes || !tgRes.message_id) {
+            throw new Error("Telegram message_id not returned");
+          }
+
+          console.log("📨 Telegram Message ID:", tgRes.message_id);
+
+          await PublishedPost.create({
+            user: post.user,
+            platform: "telegram",
+
+            pageId: tgRes.chat.id.toString(),
+            pageName: tgRes.chat.title || "",
+
+            caption: post.message,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaUrl
+              ? (post.mediaType || "image")
+              : null,
+
+            postId: tgRes.message_id.toString(),
+            videoId: null,
+
+            publishedAt: new Date(),
+            scheduledAt: post.scheduledTime || null,
+            source: "scheduled",
+            status: "published",
+
+            analyticsStatus: "synced",
+
+            analytics: {
+              reactions: 0,
+              replies: 0,
+              forwards: 0,
+              views: 0,
+            }
+          });
+
+          console.log("✅ Telegram post saved in DB");
         }
+
 
         // ✅ ADD BLUESKY
         if (post.platform === "bluesky") {

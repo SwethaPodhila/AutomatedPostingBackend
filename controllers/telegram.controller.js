@@ -1,5 +1,6 @@
 import fetch from "node-fetch"
 import SocialAccount from "../models/socialAccount.js";
+import PublishedPost from "../models/PublishedPost.js";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const BOT_USER_ID = Number(process.env.BOT_USER_ID); // ✅ cast to Number once
@@ -117,4 +118,57 @@ export const connectTelegram = async (req, res) => {
         console.error("🔥 Server error:", err);
         return res.status(500).json({ error: "Server error" });
     }
+};
+
+export const handleTelegramWebhook = async (req, res) => {
+  const update = req.body;
+
+  try {
+    console.log("📩 Telegram Webhook Hit");
+
+    // 💬 Reply Tracking
+    if (update.message?.reply_to_message) {
+      const messageId =
+        update.message.reply_to_message.message_id.toString();
+
+      const result = await PublishedPost.updateOne(
+        { postId: messageId, platform: "telegram" },
+        { $inc: { "analytics.replies": 1 } }
+      );
+
+      console.log("💬 Reply tracked:", messageId, result);
+    }
+
+    // ❤️ Reaction Tracking
+    if (update.message_reaction) {
+      const messageId =
+        update.message_reaction.message_id.toString();
+
+      const result = await PublishedPost.updateOne(
+        { postId: messageId, platform: "telegram" },
+        { $inc: { "analytics.reactions": 1 } }
+      );
+
+      console.log("❤️ Reaction tracked:", messageId, result);
+    }
+
+    // 🔁 Forward Tracking
+    if (update.message?.forward_from_chat) {
+      const messageId =
+        update.message.message_id.toString();
+
+      const result = await PublishedPost.updateOne(
+        { postId: messageId, platform: "telegram" },
+        { $inc: { "analytics.forwards": 1 } }
+      );
+
+      console.log("🔁 Forward tracked:", messageId, result);
+    }
+
+    return res.sendStatus(200);
+
+  } catch (err) {
+    console.error("❌ Telegram webhook error:", err.message);
+    return res.sendStatus(500);
+  }
 };

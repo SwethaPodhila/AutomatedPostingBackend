@@ -10,7 +10,7 @@ mongoose
   .connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB connected for analytics cron"));
 
-cron.schedule("0 * * * *", async () => {
+cron.schedule("*/2 * * * *", async () => {
   console.log("🔄 Analytics cron running (every 1 hour)...");
 
   const posts = await PublishedPost.find({

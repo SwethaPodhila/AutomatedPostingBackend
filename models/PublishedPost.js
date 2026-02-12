@@ -13,7 +13,7 @@ const PublishedPostSchema = new mongoose.Schema(
     // 🌐 Platform
     platform: {
       type: String,
-      enum: ["facebook", "instagram", "linkedin", "twitter", "pinterest"],
+      enum: ["facebook", "instagram", "linkedin", "twitter", "pinterest", "telegram"],
       required: true,
       index: true,
     },
@@ -82,34 +82,18 @@ const PublishedPostSchema = new mongoose.Schema(
 
     // 📊 ANALYTICS (synced later)
     analytics: {
-      likes: {
-        type: Number,
-        default: 0,
-      },
-      comments: {
-        type: Number,
-        default: 0,
-      },
-      shares: {
-        type: Number,
-        default: 0,
-      },
-      saves: {
-        type: Number,
-        default: 0,
-      },
-      reach: {
-        type: Number,
-        default: 0,
-      },
-      impressions: {
-        type: Number,
-        default: 0,
-      },
-      views: {               // 👈 ADD THIS
-        type: Number,
-        default: 0,
-      },
+      //common analytics
+      likes: { type: Number, default: 0 },
+      comments: { type: Number, default: 0 },
+      shares: { type: Number, default: 0 },
+      saves: { type: Number, default: 0 },
+      reach: { type: Number, default: 0 },
+      impressions: { type: Number, default: 0 },
+      views: { type: Number, default: 0 },
+      // 🔥 Telegram specific
+      reactions: { type: Number, default: 0 },
+      replies: { type: Number, default: 0 },
+      forwards: { type: Number, default: 0 },
     },
 
     // 🔁 Analytics sync tracking

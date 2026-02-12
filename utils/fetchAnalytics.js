@@ -64,8 +64,8 @@ export async function fetchAnalyticsForPost(post) {
   if (post.platform === "instagram") {
     const metrics =
       post.mediaType === "video"
-        ? "impressions,reach,likes,comments,saved,video_views"
-        : "impressions,reach,likes,comments,saved";
+        ? "impressions,reach,likes,comments,saves,video_views"
+        : "impressions,reach,likes,comments,saves";
 
     const igUrl = `https://graph.facebook.com/v19.0/${post.postId}/insights?metric=${metrics}&access_token=${accessToken}`;
 
@@ -93,7 +93,7 @@ export async function fetchAnalyticsForPost(post) {
           case "reach":
             analytics.reach = value;
             break;
-          case "saved":
+          case "saves":
             analytics.saves = value;
             break;
           case "video_views":
