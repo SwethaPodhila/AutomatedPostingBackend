@@ -125,11 +125,17 @@ export const handleTelegramWebhook = async (req, res) => {
 
   try {
     console.log("📩 Telegram Webhook Hit");
+    console.log("FULL UPDATE:", JSON.stringify(update, null, 2));
+
+    // 🔹 Detect message source
+    const msg =
+      update.message ||
+      update.channel_post ||
+      update.edited_channel_post;
 
     // 💬 Reply Tracking
-    if (update.message?.reply_to_message) {
-      const messageId =
-        update.message.reply_to_message.message_id.toString();
+    if (msg?.reply_to_message) {
+      const messageId = msg.reply_to_message.message_id.toString();
 
       const result = await PublishedPost.updateOne(
         { postId: messageId, platform: "telegram" },
@@ -153,9 +159,8 @@ export const handleTelegramWebhook = async (req, res) => {
     }
 
     // 🔁 Forward Tracking
-    if (update.message?.forward_from_chat) {
-      const messageId =
-        update.message.message_id.toString();
+    if (msg?.forward_from || msg?.forward_from_chat) {
+      const messageId = msg.message_id.toString();
 
       const result = await PublishedPost.updateOne(
         { postId: messageId, platform: "telegram" },
@@ -166,7 +171,6 @@ export const handleTelegramWebhook = async (req, res) => {
     }
 
     return res.sendStatus(200);
-
   } catch (err) {
     console.error("❌ Telegram webhook error:", err.message);
     return res.sendStatus(500);
