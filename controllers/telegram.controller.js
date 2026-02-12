@@ -125,52 +125,50 @@ export const handleTelegramWebhook = async (req, res) => {
 
   try {
     console.log("📩 Telegram Webhook Hit");
-    console.log("FULL UPDATE:", JSON.stringify(update, null, 2));
 
-    // 🔹 Detect message source
-    const msg =
-      update.message ||
-      update.channel_post ||
-      update.edited_channel_post;
+    const msg = update.message || update.channel_post;
 
     // 💬 Reply Tracking
     if (msg?.reply_to_message) {
-      const messageId = msg.reply_to_message.message_id.toString();
+      const originalMessageId =
+        msg.reply_to_message.message_id.toString();
 
       const result = await PublishedPost.updateOne(
-        { postId: messageId, platform: "telegram" },
+        { postId: originalMessageId, platform: "telegram" },
         { $inc: { "analytics.replies": 1 } }
       );
 
-      console.log("💬 Reply tracked:", messageId, result);
+      console.log("💬 Reply tracked:", originalMessageId, result);
+    }
+
+    // 🔁 Forward Tracking (VERY IMPORTANT FIX)
+    if (msg?.forward_from_message_id) {
+      const originalMessageId =
+        msg.forward_from_message_id.toString();
+
+      const result = await PublishedPost.updateOne(
+        { postId: originalMessageId, platform: "telegram" },
+        { $inc: { "analytics.forwards": 1 } }
+      );
+
+      console.log("🔁 Forward tracked:", originalMessageId, result);
     }
 
     // ❤️ Reaction Tracking
     if (update.message_reaction) {
-      const messageId =
+      const originalMessageId =
         update.message_reaction.message_id.toString();
 
       const result = await PublishedPost.updateOne(
-        { postId: messageId, platform: "telegram" },
+        { postId: originalMessageId, platform: "telegram" },
         { $inc: { "analytics.reactions": 1 } }
       );
 
-      console.log("❤️ Reaction tracked:", messageId, result);
-    }
-
-    // 🔁 Forward Tracking
-    if (msg?.forward_from || msg?.forward_from_chat) {
-      const messageId = msg.message_id.toString();
-
-      const result = await PublishedPost.updateOne(
-        { postId: messageId, platform: "telegram" },
-        { $inc: { "analytics.forwards": 1 } }
-      );
-
-      console.log("🔁 Forward tracked:", messageId, result);
+      console.log("❤️ Reaction tracked:", originalMessageId, result);
     }
 
     return res.sendStatus(200);
+
   } catch (err) {
     console.error("❌ Telegram webhook error:", err.message);
     return res.sendStatus(500);
