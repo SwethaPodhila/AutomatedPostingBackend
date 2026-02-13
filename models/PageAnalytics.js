@@ -9,7 +9,7 @@ const PageAnalyticsSchema = new mongoose.Schema({
  
   platform: {
     type: String,
-    enum: ["facebook", "instagram"],
+    enum: ["facebook", "instagram","telegram","bluesky"],
     required: true,
   },
 

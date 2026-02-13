@@ -33,7 +33,7 @@ const IG_DAILY_METRICS = ["reach", "follower_count"];
 const IG_LIFETIME_METRICS = ["online_followers"];
 
 // Run every 3 minutes
-cron.schedule("*/8 * * * *", async () => {
+cron.schedule("*/2 * * * *", async () => {
   console.log("📊 FB + IG analytics cron started (every 3 minutes)");
 
   try {
@@ -78,6 +78,7 @@ cron.schedule("*/8 * * * *", async () => {
       // INSTAGRAM ANALYTICS
       // =========================
       if (account.platform === "instagram") {
+
         // DAILY METRICS
         for (const metric of IG_DAILY_METRICS) {
           try {
@@ -94,28 +95,9 @@ cron.schedule("*/8 * * * *", async () => {
 
             analytics[metric] =
               res.data?.data?.[0]?.values?.[0]?.value || 0;
+
           } catch (err) {
-            console.error(
-              `⚠️ IG daily metric failed (${metric})`,
-              err.response?.data || err.message
-            );
             analytics[metric] = 0;
-          }
-        }
-
-        // =========================
-        // TELEGRAM ANALYTICS
-        // =========================
-        if (account.platform === "telegram") {
-          try {
-            const subscribers = await getTelegramSubscribers(
-              account.providerId
-            );
-
-            analytics.follower_count = subscribers; // ✅ correct field
-          } catch (err) {
-            console.error("⚠️ Telegram analytics failed:", err.message);
-            analytics.follower_count = 0;
           }
         }
 
@@ -135,13 +117,29 @@ cron.schedule("*/8 * * * *", async () => {
 
             analytics[metric] =
               res.data?.data?.[0]?.values?.[0]?.value || 0;
+
           } catch (err) {
-            console.error(
-              `⚠️ IG lifetime metric failed (${metric})`,
-              err.response?.data || err.message
-            );
             analytics[metric] = 0;
           }
+        }
+      }
+
+      // =========================
+      // TELEGRAM ANALYTICS (SEPARATE)
+      // =========================
+      if (account.platform === "telegram") {
+        try {
+          const subscribers = await getTelegramSubscribers(
+            account.providerId
+          );
+
+          console.log("📢 Telegram subscribers:", subscribers);
+
+          analytics.follower_count = subscribers;
+
+        } catch (err) {
+          console.error("⚠️ Telegram analytics failed:", err.message);
+          analytics.follower_count = 0;
         }
       }
 
