@@ -28,6 +28,10 @@ const PageAnalyticsSchema = new mongoose.Schema({
   follower_count: { type: Number, default: 0 },
   online_followers: { type: Number, default: 0 },
 
+  //bluesky ENTRA metrics (if any) can be added here
+  following_count: { type: Number, default: 0 },
+  posts_count: { type: Number, default: 0 },
+
   date: {
     type: String, // YYYY-MM-DD
     required: true,

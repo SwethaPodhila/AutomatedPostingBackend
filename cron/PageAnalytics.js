@@ -25,6 +25,27 @@ const getTelegramSubscribers = async (chatId) => {
   }
 };
 
+const getBlueskyProfile = async (handle) => {
+  try {
+    const res = await axios.get(
+      "https://bsky.social/xrpc/app.bsky.actor.getProfile",
+      {
+        params: {
+          actor: handle,
+        },
+      }
+    );
+
+    return res.data;
+  } catch (err) {
+    console.error(
+      "⚠️ Bluesky fetch failed:",
+      err.response?.data || err.message
+    );
+    return null;
+  }
+};
+
 // Facebook metrics (daily)
 const FB_METRICS = ["page_post_engagements", "page_views_total"];
 
@@ -38,7 +59,7 @@ cron.schedule("*/2 * * * *", async () => {
 
   try {
     const accounts = await SocialAccount.find({
-      platform: { $in: ["facebook", "instagram", "telegram"] },
+      platform: { $in: ["facebook", "instagram", "telegram", "bluesky"] },
     });
 
     for (const account of accounts) {
@@ -142,6 +163,28 @@ cron.schedule("*/2 * * * *", async () => {
           analytics.follower_count = 0;
         }
       }
+
+
+      // =========================
+      // BLUESKY ANALYTICS
+      // =========================
+      if (account.platform === "bluesky") {
+        try {
+          const profile = await getBlueskyProfile(account.providerId);
+
+          if (profile) {
+            console.log("🦋 Bluesky profile:", profile.handle);
+
+            analytics.follower_count = profile.followersCount || 0;
+            analytics.following_count = profile.followsCount || 0;
+            analytics.posts_count = profile.postsCount || 0;
+          }
+
+        } catch (err) {
+          console.error("⚠️ Bluesky analytics failed:", err.message);
+        }
+      }
+
 
       // =========================
       // SAVE TO DB
