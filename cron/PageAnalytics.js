@@ -109,16 +109,13 @@ cron.schedule("*/8 * * * *", async () => {
         if (account.platform === "telegram") {
           try {
             const subscribers = await getTelegramSubscribers(
-              account.providerId // e.g. @swethapodhila OR -1003615921842
+              account.providerId
             );
 
-            analytics.total_subscribers = subscribers;
+            analytics.follower_count = subscribers; // ✅ correct field
           } catch (err) {
-            console.error(
-              "⚠️ Telegram analytics failed:",
-              err.message
-            );
-            analytics.total_subscribers = 0;
+            console.error("⚠️ Telegram analytics failed:", err.message);
+            analytics.follower_count = 0;
           }
         }
 
