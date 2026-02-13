@@ -108,28 +108,29 @@ export async function fetchAnalyticsForPost(post) {
   }
 
   /* =========================
-     📢 TELEGRAM ANALYTICS
-     ========================= */
+   📢 TELEGRAM ANALYTICS
+   ========================= */
   if (post.platform === "telegram") {
     try {
-      const chatId = process.env.TELEGRAM_CHANNEL_USERNAME;
-      // Example: "@yourchannel"
+      const chatId = post.pageId;   // 🔥 Use DB value
+      const messageId = Number(post.postId);
 
-      const message = await bot.getChat(chatId); // Check bot access first
-
-      const msg = await bot.getChatMessage?.(
-        chatId,
-        Number(post.postId)
+      const response = await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/getChat?chat_id=${chatId}`
       );
 
-      // Some libraries may not support getChatMessage
-      // Alternative: use raw API call if needed
+      // 🔥 Correct way to fetch message
+      const msgRes = await fetch(
+        `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/getMessage?chat_id=${chatId}&message_id=${messageId}`
+      );
 
-      if (msg?.views !== undefined) {
-        analytics.views = msg.views;
+      const msgData = await msgRes.json();
+
+      console.log("📢 Telegram API Response:", msgData);
+
+      if (msgData?.result?.views !== undefined) {
+        analytics.views = msgData.result.views;
       }
-
-      console.log("📢 Telegram Views:", analytics.views);
 
     } catch (err) {
       console.error("❌ Telegram fetch error:", err.message);
