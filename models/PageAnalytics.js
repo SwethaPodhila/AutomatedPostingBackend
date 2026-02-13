@@ -6,7 +6,7 @@ const PageAnalyticsSchema = new mongoose.Schema({
     ref: "SocialAccount",
     required: true,
   },
-
+ 
   platform: {
     type: String,
     enum: ["facebook", "instagram"],

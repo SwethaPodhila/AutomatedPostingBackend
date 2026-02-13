@@ -1,8 +1,5 @@
 import fetch from "node-fetch";
 import SocialAccount from "../models/socialAccount.js";
-import TelegramBot from "node-telegram-bot-api";
-
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);//TELEGRAM_BOT_TOKEN
 
 export async function fetchAnalyticsForPost(post) {
   console.log("🔎 START analytics", post?.postId);
@@ -104,36 +101,6 @@ export async function fetchAnalyticsForPost(post) {
             break;
         }
       }
-    }
-  }
-
-  /* =========================
-   📢 TELEGRAM ANALYTICS
-   ========================= */
-  if (post.platform === "telegram") {
-    try {
-      const chatId = post.pageId;   // 🔥 Use DB value
-      const messageId = Number(post.postId);
-
-      const response = await fetch(
-        `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/getChat?chat_id=${chatId}`
-      );
-
-      // 🔥 Correct way to fetch message
-      const msgRes = await fetch(
-        `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/getMessage?chat_id=${chatId}&message_id=${messageId}`
-      );
-
-      const msgData = await msgRes.json();
-
-      console.log("📢 Telegram API Response:", msgData);
-
-      if (msgData?.result?.views !== undefined) {
-        analytics.views = msgData.result.views;
-      }
-
-    } catch (err) {
-      console.error("❌ Telegram fetch error:", err.message);
     }
   }
 

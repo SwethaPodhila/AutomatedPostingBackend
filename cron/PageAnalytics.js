@@ -2,12 +2,34 @@ const cron = require("node-cron");
 const axios = require("axios");
 const SocialAccount = require("../models/socialAccount.js");
 const PageAnalytics = require("../models/PageAnalytics.js");
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+const getTelegramSubscribers = async (chatId) => {
+  try {
+    const res = await axios.get(
+      `https://api.telegram.org/bot${BOT_TOKEN}/getChatMemberCount`,
+      {
+        params: {
+          chat_id: chatId,
+        },
+      }
+    );
+
+    return res.data.result || 0;
+  } catch (err) {
+    console.error(
+      "⚠️ Telegram subscriber fetch failed:",
+      err.response?.data || err.message
+    );
+    return 0;
+  }
+};
 
 // Facebook metrics (daily)
 const FB_METRICS = ["page_post_engagements", "page_views_total"];
 
 // Instagram metrics
-const IG_DAILY_METRICS = ["reach","follower_count"];
+const IG_DAILY_METRICS = ["reach", "follower_count"];
 const IG_LIFETIME_METRICS = ["online_followers"];
 
 // Run every 3 minutes
@@ -16,7 +38,7 @@ cron.schedule("*/8 * * * *", async () => {
 
   try {
     const accounts = await SocialAccount.find({
-      platform: { $in: ["facebook", "instagram"] },
+      platform: { $in: ["facebook", "instagram", "telegram"] },
     });
 
     for (const account of accounts) {
@@ -78,6 +100,25 @@ cron.schedule("*/8 * * * *", async () => {
               err.response?.data || err.message
             );
             analytics[metric] = 0;
+          }
+        }
+
+        // =========================
+        // TELEGRAM ANALYTICS
+        // =========================
+        if (account.platform === "telegram") {
+          try {
+            const subscribers = await getTelegramSubscribers(
+              account.providerId // e.g. @swethapodhila OR -1003615921842
+            );
+
+            analytics.total_subscribers = subscribers;
+          } catch (err) {
+            console.error(
+              "⚠️ Telegram analytics failed:",
+              err.message
+            );
+            analytics.total_subscribers = 0;
           }
         }
 
