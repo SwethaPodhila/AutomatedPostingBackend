@@ -9,6 +9,12 @@ export async function fetchAnalyticsForPost(post) {
     return null;
   }
 
+  // ✅ TELEGRAM SKIP
+  if (post.platform === "telegram") {
+    console.log("📭 Telegram analytics handled via webhook");
+    return null;
+  }
+
   const socialAccount = await SocialAccount.findOne({
     user: post.user,
     platform: post.platform,
