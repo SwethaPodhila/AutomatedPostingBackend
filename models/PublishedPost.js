@@ -13,7 +13,7 @@ const PublishedPostSchema = new mongoose.Schema(
     // 🌐 Platform
     platform: {
       type: String,
-      enum: ["facebook", "instagram", "linkedin", "twitter", "pinterest", "telegram"],
+      enum: ["facebook", "instagram", "linkedin", "twitter", "pinterest", "telegram", "bluesky"],
       required: true,
       index: true,
     },
@@ -86,6 +86,7 @@ const PublishedPostSchema = new mongoose.Schema(
       likes: { type: Number, default: 0 },
       comments: { type: Number, default: 0 },
       shares: { type: Number, default: 0 },
+      
       saves: { type: Number, default: 0 },
       reach: { type: Number, default: 0 },
       impressions: { type: Number, default: 0 },

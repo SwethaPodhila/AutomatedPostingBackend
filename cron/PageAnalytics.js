@@ -25,27 +25,6 @@ const getTelegramSubscribers = async (chatId) => {
   }
 };
 
-const getBlueskyProfile = async (handle) => {
-  try {
-    const res = await axios.get(
-      "https://bsky.social/xrpc/app.bsky.actor.getProfile",
-      {
-        params: {
-          actor: handle,
-        },
-      }
-    );
-
-    return res.data;
-  } catch (err) {
-    console.error(
-      "⚠️ Bluesky fetch failed:",
-      err.response?.data || err.message
-    );
-    return null;
-  }
-};
-
 // Facebook metrics (daily)
 const FB_METRICS = ["page_post_engagements", "page_views_total"];
 
@@ -54,7 +33,7 @@ const IG_DAILY_METRICS = ["reach", "follower_count"];
 const IG_LIFETIME_METRICS = ["online_followers"];
 
 // Run every 3 minutes
-cron.schedule("*/2 * * * *", async () => {
+cron.schedule("*/9 * * * *", async () => {
   console.log("📊 FB + IG analytics cron started (every 3 minutes)");
 
   try {
@@ -170,21 +149,87 @@ cron.schedule("*/2 * * * *", async () => {
       // =========================
       if (account.platform === "bluesky") {
         try {
-          const profile = await getBlueskyProfile(account.providerId);
+          const res = await axios.get(
+            "https://bsky.social/xrpc/app.bsky.actor.getProfile",
+            {
+              params: {
+                actor: account.providerId, // DID use chesthunam
+              },
+              headers: {
+                Authorization: `Bearer ${account.accessToken}`,
+              },
+            }
+          );
 
-          if (profile) {
-            console.log("🦋 Bluesky profile:", profile.handle);
+          const profile = res.data;
 
-            analytics.follower_count = profile.followersCount || 0;
-            analytics.following_count = profile.followsCount || 0;
-            analytics.posts_count = profile.postsCount || 0;
-          }
+          console.log("🦋 Bluesky profile:", profile.handle);
+
+          analytics.follower_count = profile.followersCount || 0;
+          analytics.following_count = profile.followsCount || 0;
+          analytics.posts_count = profile.postsCount || 0;
 
         } catch (err) {
-          console.error("⚠️ Bluesky analytics failed:", err.message);
+
+          // 🔄 TOKEN EXPIRED HANDLING
+          if (err.response?.status === 401 && account.refreshToken) {
+            try {
+              console.log("🔄 Refreshing Bluesky token...");
+
+              const refreshRes = await axios.post(
+                "https://bsky.social/xrpc/com.atproto.server.refreshSession",
+                {},
+                {
+                  headers: {
+                    Authorization: `Bearer ${account.refreshToken}`,
+                  },
+                }
+              );
+
+              const newAccessToken = refreshRes.data.accessJwt;
+              const newRefreshToken = refreshRes.data.refreshJwt;
+
+              // Save new tokens in DB
+              account.accessToken = newAccessToken;
+              account.refreshToken = newRefreshToken;
+              await account.save();
+
+              console.log("✅ Token refreshed. Retrying profile fetch...");
+
+              // Retry profile fetch
+              const retryRes = await axios.get(
+                "https://bsky.social/xrpc/app.bsky.actor.getProfile",
+                {
+                  params: {
+                    actor: account.providerId,
+                  },
+                  headers: {
+                    Authorization: `Bearer ${newAccessToken}`,
+                  },
+                }
+              );
+
+              const profile = retryRes.data;
+
+              analytics.follower_count = profile.followersCount || 0;
+              analytics.following_count = profile.followsCount || 0;
+              analytics.posts_count = profile.postsCount || 0;
+
+            } catch (refreshErr) {
+              console.error(
+                "❌ Bluesky refresh failed:",
+                refreshErr.response?.data || refreshErr.message
+              );
+            }
+
+          } else {
+            console.error(
+              "⚠️ Bluesky analytics failed:",
+              err.response?.data || err.message
+            );
+          }
         }
       }
-
 
       // =========================
       // SAVE TO DB

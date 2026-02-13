@@ -31,7 +31,7 @@ exports.connectBluesky = async (req, res) => {
             user: userId,
             platform: "bluesky",
             providerId: agent.session.did,
-            connectedFrom: "web",
+            connectedFrom: "web", 
             accessToken: agent.session.accessJwt,
             refreshToken: agent.session.refreshJwt,
             scopes: ["post", "read", "metrics"],

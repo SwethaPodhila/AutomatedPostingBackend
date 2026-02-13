@@ -104,6 +104,40 @@ export async function fetchAnalyticsForPost(post) {
     }
   }
 
+  /* =========================
+   🦋 BLUESKY ANALYTICS
+   ========================= */
+  if (post.platform === "bluesky") {
+    try {
+      const bsUrl = `https://bsky.social/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(post.postId)}`;
+
+      const bsRes = await fetch(bsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      const bsData = await bsRes.json();
+
+      const bsPost = bsData?.posts?.[0];
+
+      if (bsPost) {
+        analytics.likes = bsPost.likeCount || 0;
+        analytics.comments = bsPost.replyCount || 0;
+        analytics.shares = bsPost.repostCount || 0;
+
+        // Bluesky lo views metric official ga ledu
+        analytics.views = 0;
+        analytics.reach = 0;
+        analytics.impressions = 0;
+        analytics.saves = 0;
+      }
+
+    } catch (err) {
+      console.error("🦋 Bluesky analytics failed:", err.message);
+    }
+  }
+
   console.log("✅ FINAL ANALYTICS:", analytics);
   return analytics;
 }

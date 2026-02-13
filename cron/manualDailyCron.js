@@ -210,17 +210,54 @@ cron.schedule("* * * * *", async () => {
 
 
         // ✅ ADD BLUESKY
+        // ✅ ADD BLUESKY
         if (post.platform === "bluesky") {
-          await publishToBlueskyWithImage({
+          const bsRes = await publishToBlueskyWithImage({
             service: acc.meta?.service || "https://bsky.social",
-            handle: acc.meta?.handle,
             accessJwt: acc.accessToken,
             refreshJwt: acc.refreshToken,
             did: acc.providerId,
             message: post.message,
             imageUrl: post.mediaUrl,
           });
+
+          console.log("🦋 Bluesky Post Response:", bsRes);
+
+          // 🔥 IMPORTANT
+          const postUri = bsRes.uri; // THIS IS POST ID
+
+          await PublishedPost.create({
+            user: post.user,
+            platform: "bluesky",
+
+            pageId: acc.providerId,
+            pageName: acc.meta?.handle || "",
+
+            caption: post.message,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaType || "image",
+
+            postId: postUri,  // ✅ VERY IMPORTANT
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: post.scheduledTime || null,
+            source: "scheduled",
+            status: "published",
+            analyticsStatus: "pending",
+
+            analytics: {
+              like_count: 0,
+              repost_count: 0,
+              reply_count: 0,
+              quote_count: 0,
+            }
+          });
+
+          console.log("✅ Bluesky post saved to DB");
         }
+
 
         // ✅ ADD PINTEREST
         if (post.platform === "pinterest") {
