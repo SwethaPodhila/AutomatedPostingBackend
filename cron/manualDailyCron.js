@@ -195,21 +195,12 @@ cron.schedule("* * * * *", async () => {
             source: "scheduled",
             status: "published",
 
-            analyticsStatus: "synced",
-
-            analytics: {
-              reactions: 0,
-              replies: 0,
-              forwards: 0,
-              views: 0,
-            }
+            analyticsStatus: "pending",   // ✅ correct
           });
 
           console.log("✅ Telegram post saved in DB");
         }
 
-
-        // ✅ ADD BLUESKY
         // ✅ ADD BLUESKY
         if (post.platform === "bluesky") {
           const bsRes = await publishToBlueskyWithImage({

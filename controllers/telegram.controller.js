@@ -128,40 +128,46 @@ export const handleTelegramWebhook = async (req, res) => {
 
     const msg = update.message || update.channel_post;
 
-    // 💬 Reply Tracking
+    /* =========================
+       💬 Reply Tracking → comments
+       ========================= */
     if (msg?.reply_to_message) {
       const originalMessageId =
         msg.reply_to_message.message_id.toString();
 
       const result = await PublishedPost.updateOne(
         { postId: originalMessageId, platform: "telegram" },
-        { $inc: { "analytics.replies": 1 } }
+        { $inc: { "analytics.comments": 1 } }   // ✅ changed
       );
 
       console.log("💬 Reply tracked:", originalMessageId, result);
     }
 
-    // 🔁 Forward Tracking (VERY IMPORTANT FIX)
+    /* =========================
+       🔁 Forward Tracking → shares
+       ========================= */
     if (msg?.forward_from_message_id) {
       const originalMessageId =
         msg.forward_from_message_id.toString();
 
       const result = await PublishedPost.updateOne(
         { postId: originalMessageId, platform: "telegram" },
-        { $inc: { "analytics.forwards": 1 } }
+        { $inc: { "analytics.shares": 1 } }   // ✅ changed
       );
 
       console.log("🔁 Forward tracked:", originalMessageId, result);
     }
 
-    // ❤️ Reaction Tracking
+    /* =========================
+       ❤️ Reaction Tracking → likes
+       ========================= */
     if (update.message_reaction) {
       const originalMessageId =
         update.message_reaction.message_id.toString();
 
       const result = await PublishedPost.updateOne(
         { postId: originalMessageId, platform: "telegram" },
-        { $inc: { "analytics.reactions": 1 } }
+        { $inc: { "analytics.likes": 1 } }   // ✅ changed
       );
 
       console.log("❤️ Reaction tracked:", originalMessageId, result);
