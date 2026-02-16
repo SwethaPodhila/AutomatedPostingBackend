@@ -773,7 +773,7 @@ export const pauseSchedule = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Posting stopped from ${pauseDate.toDateString()} to ${schedule.endDate.toDateString()}`,
+      message: `Posting stopped from ${pauseDate.toDateString()}. Last active date is ${schedule.endDate.toDateString()}.`,
     });
 
   } catch (err) {
