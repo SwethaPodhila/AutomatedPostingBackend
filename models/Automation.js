@@ -33,7 +33,7 @@ const AutomationSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["scheduled", "completed", "failed"],
+      enum: ["scheduled", "completed", "failed", "paused"],
       default: "scheduled",
     },
 

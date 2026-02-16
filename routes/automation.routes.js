@@ -1,5 +1,5 @@
 import express from "express";
-import { createAutomation, getUserAccounts, universalPublish,getCalendar } from "../controllers/automation.controller.js";
+import { createAutomation, getUserAccounts, universalPublish,getCalendar,pauseSchedule } from "../controllers/automation.controller.js";
 
 const router = express.Router();
 
@@ -37,6 +37,7 @@ router.post(
 );
 
 router.get("/weekly/:userId", getCalendar);
+router.put("/pause/:type/:id", pauseSchedule);
 
 export default router;
   

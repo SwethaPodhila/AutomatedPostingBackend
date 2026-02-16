@@ -35,7 +35,7 @@ const AutoManual = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["scheduled", "posted", "failed","completed"],
+      enum: ["scheduled", "posted", "failed", "completed", "paused"],
       default: "scheduled",
     },
 

@@ -282,15 +282,18 @@ export const universalPublish = async (req, res) => {
           providerId: chatId,
         });
 
-        console.log("🔍 Telegram acc for", chatId, acc);
-
-        // ❗ IMPORTANT: do NOT continue silently
         if (!acc) {
           console.log("❌ Telegram account NOT FOUND in DB");
           continue;
         }
 
-        const mediaUrl = media ? media.path : null;
+        const mediaUrl = req.file ? req.file.path : null;
+
+        const mediaType = req.file
+          ? req.file.mimetype.startsWith("video")
+            ? "video"
+            : "image"
+          : null;
 
         // 🔥 IMMEDIATE POST
         if (!normalizedStartDate && !normalizedEndDate && !parsedTimes.length) {
@@ -302,22 +305,17 @@ export const universalPublish = async (req, res) => {
             mediaUrl,
           });
 
-          console.log("💾 Saving Telegram POSTED");
-
           await AutoManual.create({
             user: userId,
             platform: "telegram",
             pageId: chatId,
             message,
             mediaUrl,
+            mediaType,   // ✅ ADD THIS
             status: "posted",
           });
 
-        }
-        // ⏰ SCHEDULED
-        else {
-
-          console.log("💾 Saving Telegram SCHEDULED");
+        } else {
 
           await AutoManual.create({
             user: userId,
@@ -325,6 +323,7 @@ export const universalPublish = async (req, res) => {
             pageId: chatId,
             message,
             mediaUrl,
+            mediaType,   // ✅ ADD THIS
             startDate: normalizedStartDate,
             endDate: normalizedEndDate,
             times: parsedTimes,
@@ -583,7 +582,6 @@ export const createAutomation = async (req, res) => {
   }
 };
 
-
 /* ===============================
    HELPER: GET DATES BETWEEN
 ================================ */
@@ -663,6 +661,7 @@ export const getCalendar = async (req, res) => {
       dates.forEach((date) => {
         item.times.forEach((time) => {
           expandedPosts.push({
+            _id: item._id,
             source: "manual",
             date: date.toISOString().split("T")[0],
             time,
@@ -672,7 +671,10 @@ export const getCalendar = async (req, res) => {
             mediaUrl: item.mediaUrl,
             mediaType: item.mediaType,
             status: item.status,
+            startDate: item.startDate,
+            endDate: item.endDate,
           });
+
         });
       });
     });
@@ -698,6 +700,7 @@ export const getCalendar = async (req, res) => {
       dates.forEach((date) => {
         item.times.forEach((time) => {
           expandedPosts.push({
+            _id: item._id,
             source: "automation",
             date: date.toISOString().split("T")[0],
             time,
@@ -707,6 +710,8 @@ export const getCalendar = async (req, res) => {
             mediaUrl: null,
             mediaType: null,
             status: item.status,
+            startDate: item.startDate,
+            endDate: item.endDate,
           });
         });
       });
@@ -727,5 +732,52 @@ export const getCalendar = async (req, res) => {
       success: false,
       message: "Server error",
     });
+  }
+};
+
+export const pauseSchedule = async (req, res) => {
+  try {
+    const { id, type } = req.params;
+    const { pauseFrom } = req.body;
+
+    if (!pauseFrom) {
+      return res.status(400).json({ message: "pauseFrom date required" });
+    }
+
+    const pauseDate = new Date(pauseFrom);
+
+    let Model;
+
+    if (type === "manual") Model = AutoManual;
+    else if (type === "automation") Model = Automation;
+    else return res.status(400).json({ message: "Invalid type" });
+
+    const schedule = await Model.findById(id);
+    if (!schedule) {
+      return res.status(404).json({ message: "Schedule not found" });
+    }
+
+    if (pauseDate >= schedule.endDate) {
+      return res.status(400).json({
+        message: "Schedule already completed",
+      });
+    }
+
+    const yesterday = new Date(pauseDate);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    schedule.endDate = yesterday;
+    schedule.status = "paused";
+
+    await schedule.save();
+
+    res.json({
+      success: true,
+      message: `Posting stopped from ${pauseDate.toDateString()} to ${schedule.endDate.toDateString()}`,
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
