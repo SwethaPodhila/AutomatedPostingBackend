@@ -6,29 +6,28 @@ const PageAnalyticsSchema = new mongoose.Schema({
     ref: "SocialAccount",
     required: true,
   },
- 
+
   platform: {
     type: String,
-    enum: ["facebook", "instagram","telegram","bluesky"],
+    enum: ["facebook", "instagram", "telegram", "bluesky"],
     required: true,
   },
 
-  providerId: String,
+  providerId: {
+    type: String,
+    required: true
+  },
 
-  // ======================
   // FACEBOOK METRICS
-  // ======================
   page_post_engagements: { type: Number, default: 0 },
   page_views_total: { type: Number, default: 0 },
 
-  // ======================
   // INSTAGRAM METRICS
-  // ======================
   reach: { type: Number, default: 0 },
   follower_count: { type: Number, default: 0 },
   online_followers: { type: Number, default: 0 },
 
-  //bluesky ENTRA metrics (if any) can be added here
+  // BLUESKY
   following_count: { type: Number, default: 0 },
   posts_count: { type: Number, default: 0 },
 
@@ -42,5 +41,12 @@ const PageAnalyticsSchema = new mongoose.Schema({
     default: Date.now,
   },
 });
+
+
+/* 🔥 VERY IMPORTANT — Prevent Duplicates */
+PageAnalyticsSchema.index(
+  { socialAccount: 1, providerId: 1, date: 1 },
+  { unique: true }
+);
 
 module.exports = mongoose.model("PageAnalytics", PageAnalyticsSchema);

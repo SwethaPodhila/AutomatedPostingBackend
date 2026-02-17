@@ -56,7 +56,7 @@ cron.schedule("*/9 * * * *", async () => {
               {
                 params: {
                   metric,
-                  period: "day",
+                  period: "week",
                   access_token: account.accessToken,
                 },
               }
@@ -142,7 +142,6 @@ cron.schedule("*/9 * * * *", async () => {
           analytics.follower_count = 0;
         }
       }
-
 
       // =========================
       // BLUESKY ANALYTICS
