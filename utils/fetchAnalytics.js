@@ -115,36 +115,29 @@ export async function fetchAnalyticsForPost(post) {
    ========================= */
   if (post.platform === "bluesky") {
     try {
+      console.log("Fetching Bluesky analytics for:", post.postId);
+
       const bsUrl = `https://bsky.social/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(post.postId)}`;
 
-      const bsRes = await fetch(bsUrl, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
+      const bsRes = await fetch(bsUrl);
 
       const bsData = await bsRes.json();
 
-      const bsPost = bsData?.posts?.[0];
+      console.log("FULL BLUESKY RESPONSE:", JSON.stringify(bsData, null, 2));
 
-      if (bsPost) {
-        analytics.likes = bsPost.likeCount || 0;
-        analytics.comments = bsPost.replyCount || 0;
-        analytics.shares = bsPost.repostCount || 0;
+      if (bsData?.posts?.length > 0) {
+        const bsPost = bsData.posts[0];
 
-        // Bluesky lo views metric official ga ledu
-        analytics.views = 0;
-        analytics.reach = 0;
-        analytics.impressions = 0;
-        analytics.saves = 0;
+        analytics.likes = bsPost.likeCount ?? 0; 
+        analytics.comments = bsPost.replyCount ?? 0;
+        analytics.shares = bsPost.repostCount ?? 0;
       }
 
     } catch (err) {
-      console.error("🦋 Bluesky analytics failed:", err.message);
+      console.error("Bluesky analytics failed:", err);
     }
   }
 
   console.log("✅ FINAL ANALYTICS:", analytics);
   return analytics;
 }
-    
