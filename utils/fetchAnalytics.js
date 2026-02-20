@@ -1,5 +1,6 @@
 import fetch from "node-fetch";
 import SocialAccount from "../models/socialAccount.js";
+import { BskyAgent } from "@atproto/api";
 
 export async function fetchAnalyticsForPost(post) {
   console.log("🔎 START analytics", post?.postId);
@@ -111,30 +112,53 @@ export async function fetchAnalyticsForPost(post) {
   }
 
   /* =========================
-   🦋 BLUESKY ANALYTICS
-   ========================= */
+    🦋 BLUESKY ANALYTICS
+    ========================= */
   if (post.platform === "bluesky") {
     try {
-      console.log("Fetching Bluesky analytics for:", post.postId);
+      const socialAccount = await SocialAccount.findOne({
+        user: post.user,
+        platform: "bluesky",
+      });
 
-      const bsUrl = `https://bsky.social/xrpc/app.bsky.feed.getPosts?uris=${encodeURIComponent(post.postId)}`;
+      if (!socialAccount) throw new Error("Bluesky not connected");
 
-      const bsRes = await fetch(bsUrl);
+      const agent = new BskyAgent({
+        service: socialAccount.meta.service,
+      });
 
-      const bsData = await bsRes.json();
+      // ✅ Only resume session
+      await agent.resumeSession({
+        accessJwt: socialAccount.accessToken,
+        refreshJwt: socialAccount.refreshToken,
+        did: socialAccount.providerId,
+      });
 
-      console.log("FULL BLUESKY RESPONSE:", JSON.stringify(bsData, null, 2));
-
-      if (bsData?.posts?.length > 0) {
-        const bsPost = bsData.posts[0];
-
-        analytics.likes = bsPost.likeCount ?? 0; 
-        analytics.comments = bsPost.replyCount ?? 0;
-        analytics.shares = bsPost.repostCount ?? 0;
+      // ✅ VERY IMPORTANT — Save rotated tokens immediately
+      if (agent.session) {
+        socialAccount.accessToken = agent.session.accessJwt;
+        socialAccount.refreshToken = agent.session.refreshJwt;
+        await socialAccount.save();
       }
 
+      const uri = post.postId;
+
+      const bsPost = await agent.getPosts({
+        uris: [uri],
+      });
+
+      if (!bsPost?.data?.posts?.length) {
+        throw new Error("Post not found");
+      }
+
+      const postData = bsPost.data.posts[0];
+
+      analytics.likes = postData.likeCount ?? 0;
+      analytics.comments = postData.replyCount ?? 0;
+      analytics.shares = postData.repostCount ?? 0;
+
     } catch (err) {
-      console.error("Bluesky analytics failed:", err);
+      console.error("Bluesky analytics failed:", err.message);
     }
   }
 
