@@ -328,24 +328,78 @@ cron.schedule("* * * * *", async () => {
 
         // 🚀 PUBLISH
         if (auto.platform === "facebook") {
-          await publishToPage({
+          const fbRes = await publishToPage({
             pageAccessToken: acc.accessToken,
             pageId: auto.pageId,
             message: caption,
             mediaUrl: mediaUrl || null,
             mediaType: mediaUrl ? "image" : null,
           });
+
+          const rawId = fbRes.id;
+
+          const postId = rawId.includes("_")
+            ? rawId
+            : `${auto.pageId}_${rawId}`;
+
+          await PublishedPost.create({
+            user: auto.user,
+            platform: "facebook",
+            pageId: auto.pageId,
+            pageName: acc.meta?.username || "",
+            caption,
+            mediaUrl,
+            mediaType: mediaUrl ? "image" : null,
+
+            postId,
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: auto.scheduledTime || null,
+            source: "automation",   // 🔥 DIFFERENCE HERE
+            status: "published",
+            analyticsStatus: "pending",
+          });
         }
 
         if (auto.platform === "instagram") {
-          if (!mediaUrl) continue; // Instagram needs image
-          await publishInstagramUtil({
+
+          if (!mediaUrl) continue; // Instagram requires image
+
+          const igRes = await publishInstagramUtil({
             igUserId: acc.providerId,
             accessToken: acc.accessToken,
             mediaUrl: mediaUrl,
             mediaType: "image",
             caption,
           });
+
+          console.log("🧪 IG Automation Post ID:", igRes.postId);
+
+          await PublishedPost.create({
+            user: auto.user,
+            platform: "instagram",
+
+            pageId: acc.providerId,
+            pageName: acc.meta?.username || "",
+
+            caption,
+            mediaUrl,
+            mediaType: "image",
+
+            postId: igRes.postId,
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: auto.scheduledTime || null,
+            source: "automation",   // 🔥 important
+            status: "published",
+            analyticsStatus: "pending",
+          });
+
+          console.log("✅ Instagram automation saved to DB");
         }
 
         if (auto.platform === "linkedin") {
@@ -360,25 +414,91 @@ cron.schedule("* * * * *", async () => {
 
         // ✅ ADD THIS
         if (auto.platform === "telegram") {
-          await postToTelegram({
+
+          const tgRes = await postToTelegram({
             botToken: acc.accessToken,
             chatId: auto.pageId,
             message: caption,
             mediaUrl: mediaUrl || null,
           });
+
+          if (!tgRes || !tgRes.message_id) {
+            throw new Error("Telegram message_id not returned");
+          }
+
+          console.log("📨 Telegram Automation Message ID:", tgRes.message_id);
+
+          await PublishedPost.create({
+            user: auto.user,
+            platform: "telegram",
+
+            pageId: tgRes.chat.id.toString(),
+            pageName: tgRes.chat.title || "",
+
+            caption,
+            mediaUrl,
+            mediaType: mediaUrl ? "image" : null,
+
+            postId: tgRes.message_id.toString(),
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: auto.scheduledTime || null,
+            source: "automation",
+            status: "published",
+            analyticsStatus: "pending",
+          });
+
+          console.log("✅ Telegram automation saved to DB");
         }
 
         // aDD BLUESKY
         if (auto.platform === "bluesky") {
-          await publishToBlueskyWithImage({
+
+          const bsRes = await publishToBlueskyWithImage({
             service: acc.meta?.service || "https://bsky.social",
-            handle: acc.meta?.handle,
             accessJwt: acc.accessToken,
             refreshJwt: acc.refreshToken,
             did: acc.providerId,
             message: caption,
             imageUrl: mediaUrl,
           });
+
+          console.log("🦋 Bluesky Automation Response:", bsRes);
+
+          const postUri = bsRes.uri; // 🔥 This is the post ID
+
+          await PublishedPost.create({
+            user: auto.user,
+            platform: "bluesky",
+
+            pageId: acc.providerId,
+            pageName: acc.meta?.handle || "",
+
+            caption,
+            mediaUrl,
+            mediaType: mediaUrl ? "image" : null,
+
+            postId: postUri,
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: auto.scheduledTime || null,
+            source: "automation",
+            status: "published",
+            analyticsStatus: "pending",
+
+            analytics: {
+              like_count: 0,
+              repost_count: 0,
+              reply_count: 0,
+              quote_count: 0,
+            }
+          });
+
+          console.log("✅ Bluesky automation saved to DB");
         }
 
         // ✅ ADD PINTEREST
