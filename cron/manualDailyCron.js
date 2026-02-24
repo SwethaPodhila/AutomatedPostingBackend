@@ -150,13 +150,41 @@ cron.schedule("* * * * *", async () => {
 
 
         if (post.platform === "linkedin") {
-          await publishToLinkedIn({
+
+          const liRes = await publishToLinkedIn({
             accessToken: acc.accessToken,
-            providerId: acc.providerId,   // 🔥 REQUIRED
-            content: post.message,        // 🔥 correct key
+            providerId: acc.providerId,
+            content: post.message,
             mediaUrl: post.mediaUrl || null,
             mediaType: post.mediaType || null,
           });
+
+          // const postId = liRes.id; // 🔥 VERY IMPORTANT
+          const postId = liRes.postId;
+
+          await PublishedPost.create({
+            user: post.user,
+            platform: "linkedin",
+
+            pageId: acc.providerId,
+            pageName: acc.meta?.username || "",
+
+            caption: post.message,
+            mediaUrl: post.mediaUrl,
+            mediaType: post.mediaType,
+
+            postId,          // ✅ NOW SAVING
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: post.scheduledTime || null,
+            source: "scheduled",
+            status: "published",
+            analyticsStatus: "pending",
+          });
+
+          console.log("✅ LinkedIn post saved to DB");
         }
 
         if (post.platform === "telegram") {
@@ -403,13 +431,40 @@ cron.schedule("* * * * *", async () => {
         }
 
         if (auto.platform === "linkedin") {
-          await publishToLinkedIn({
+
+          const liRes = await publishToLinkedIn({
             accessToken: acc.accessToken,
             providerId: acc.providerId,
             content: caption,
             mediaUrl: mediaUrl || null,
             mediaType: mediaUrl ? "image" : null,
           });
+
+          const postId = liRes.postId; // 🔥 LinkedIn returns urn:li:share:xxxx
+
+          await PublishedPost.create({
+            user: auto.user,
+            platform: "linkedin",
+
+            pageId: acc.providerId,
+            pageName: acc.meta?.username || "",
+
+            caption,
+            mediaUrl,
+            mediaType: mediaUrl ? "image" : null,
+
+            postId,               // ✅ VERY IMPORTANT
+            videoId: null,
+
+            isPaid: false,
+            publishedAt: new Date(),
+            scheduledAt: auto.scheduledTime || null,
+            source: "automation",
+            status: "published",
+            analyticsStatus: "pending",
+          });
+
+          console.log("✅ LinkedIn automation post saved to DB");
         }
 
         // ✅ ADD THIS
@@ -523,7 +578,6 @@ cron.schedule("* * * * *", async () => {
       }
     }
   }
-
 
   catch (err) {
     console.error("🔥 Cron Crash:", err);

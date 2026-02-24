@@ -1,6 +1,7 @@
 import fetch from "node-fetch";
 import SocialAccount from "../models/socialAccount.js";
 import { BskyAgent } from "@atproto/api";
+import TwitterAccount from "../models/TwitterAccount.js";
 
 export async function fetchAnalyticsForPost(post) {
   console.log("🔎 START analytics", post?.postId);
@@ -16,18 +17,38 @@ export async function fetchAnalyticsForPost(post) {
     return null;
   }
 
-  const socialAccount = await SocialAccount.findOne({
-    user: post.user,
-    platform: post.platform,
-    providerId: post.pageId,
-  });
+  let account = null;
+  let accessToken = null;
 
-  if (!socialAccount) {
-    throw new Error("❌ Social account not connected");
+  if (post.platform === "linkedin") {
+
+    account = await TwitterAccount.findOne({
+      user: post.user.toString(),
+      platform: "linkedin",
+      providerId: post.pageId,
+    });
+
+    if (!account) {
+      throw new Error("❌ LinkedIn account not connected");
+    }
+
+    accessToken = account.accessToken;
+
+  } else {
+
+    account = await SocialAccount.findOne({
+      user: post.user,
+      platform: post.platform,
+      providerId: post.pageId,
+    });
+
+    if (!account) {
+      throw new Error("❌ Social account not connected");
+    }
+
+    accessToken = account.accessToken;
   }
-
-  const accessToken = socialAccount.accessToken;
-
+  
   const analytics = {
     views: 0,
     likes: 0,
@@ -159,6 +180,76 @@ export async function fetchAnalyticsForPost(post) {
 
     } catch (err) {
       console.error("Bluesky analytics failed:", err.message);
+    }
+  }
+
+  /* =========================
+     🔷 LINKEDIN ANALYTICS
+     ========================= */
+  if (post.platform === "linkedin") {
+    try {
+      console.log("🔷 Fetching LinkedIn analytics for", post.postId);
+
+      const account = await TwitterAccount.findOne({
+        user: post.user.toString(),
+        platform: "linkedin",
+        providerId: post.pageId,
+      });
+
+      if (!account) {
+        console.log("❌ LinkedIn account not found in DB");
+        return;
+      }
+
+      const accessToken = account.accessToken;   // ✅ IMPORTANT
+
+      const isOrganization =
+        account.meta?.accountType === "organization";
+
+      const postUrn = post.postId;
+
+      if (isOrganization) {
+        const orgUrn = `urn:li:organization:${post.pageId}`;
+
+        const url = `https://api.linkedin.com/v2/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=${encodeURIComponent(orgUrn)}&shares[0]=${encodeURIComponent(postUrn)}`;
+
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "X-Restli-Protocol-Version": "2.0.0",
+          },
+        });
+
+        const data = await res.json();
+        const stats = data?.elements?.[0]?.totalShareStatistics;
+
+        if (stats) {
+          analytics.likes = stats.likeCount || 0;
+          analytics.comments = stats.commentCount || 0;
+          analytics.shares = stats.shareCount || 0;
+          analytics.impressions = stats.impressionCount || 0;
+        }
+
+      } else {
+
+        const url = `https://api.linkedin.com/v2/socialActions/${encodeURIComponent(postUrn)}`;
+
+        const res = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "X-Restli-Protocol-Version": "2.0.0",
+          },
+        });
+
+        const data = await res.json();
+
+        analytics.likes = data?.likesSummary?.totalCount || 0;
+        analytics.comments = data?.commentsSummary?.totalCount || 0;
+        analytics.shares = data?.sharesSummary?.totalCount || 0;
+      }
+
+    } catch (err) {
+      console.error("LinkedIn analytics failed:", err.message);
     }
   }
 

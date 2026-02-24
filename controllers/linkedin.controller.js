@@ -7,7 +7,7 @@ import cloudinary, { uploadImageToCloud } from "../config/cloudinary.js"; // ✅
 import fs from 'fs'; // ✅ ADD THIS LINE
 import path from 'path'; // ✅ ADD THIS LINE (optional but useful)
 
-dotenv.config();
+dotenv.config(); 
 
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID;
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET;
@@ -166,7 +166,7 @@ export const linkedinCallback = async (req, res) => {
         refreshToken: '',
         tokenExpiresAt: new Date(Date.now() + expires_in * 1000),
         loginPlatform: platform || 'web', // Store platform info
-        scopes: ["profile", "email", "w_member_social", "openid"],
+        scopes: ["profile", "email", "w_member_social", "openid","r_member_social"],
         meta: {
           twitterId: profile.sub,
           username: profile.name ? profile.name.toLowerCase().replace(/\s+/g, '.') : 'linkedin_user',
