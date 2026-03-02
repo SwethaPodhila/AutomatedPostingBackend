@@ -8,7 +8,7 @@ dotenv.config();
 const TWITTER_CLIENT_ID = process.env.TWITTER_CLIENT_ID;
 const TWITTER_CLIENT_SECRET = process.env.TWITTER_CLIENT_SECRET;
 const BACKEND_URL = process.env.BACKEND_URL || "https://automatedpostingbackend-h9dc.onrender.com";
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://automatedpostingsfrontend-7d5o.onrender.com";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://aiwingsglobal.com";
 const TWITTER_CALLBACK_URL = `${BACKEND_URL}/auth/twitter/callback`;
 
 // Twitter client for getting new tokens
@@ -771,7 +771,7 @@ const handleRedirect = (res, platform, userData, userId, sessionId, accessToken)
 
   // WEB: Normal Redirect
   const webRedirect =
-    "https://automatedpostingsfrontend-7d5o.onrender.com/twitter-manager" + 
+    "https://aiwingsglobal.com/twitter-manager" + 
     `?twitter=connected` +
     `&username=${encodeURIComponent(userData.username)}` +
     `&user_id=${userId}`;
@@ -789,6 +789,6 @@ const sendErrorResponse = (res, error, platform) => {
   }
 
   // Web error
-  const webError = `https://automatedpostingsfrontend-7d5o.onrender.com/twitter-connect?error=${encodeURIComponent(error)}`;
+  const webError = `https://aiwingsglobal.com/twitter-connect?error=${encodeURIComponent(error)}`;
   return res.redirect(webError);
 };

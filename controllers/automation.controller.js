@@ -737,39 +737,59 @@ export const getCalendar = async (req, res) => {
 
 export const pauseSchedule = async (req, res) => {
   try {
+    console.log("📥 Pause API called");
+    console.log("Params:", req.params);
+    console.log("Body:", req.body);
+
     const { id, type } = req.params;
     const { pauseFrom } = req.body;
 
     if (!pauseFrom) {
+      console.log("❌ pauseFrom missing");
       return res.status(400).json({ message: "pauseFrom date required" });
     }
 
     const pauseDate = new Date(pauseFrom);
+    console.log("Pause Date:", pauseDate);
 
     let Model;
 
     if (type === "manual") Model = AutoManual;
     else if (type === "automation") Model = Automation;
-    else return res.status(400).json({ message: "Invalid type" });
+    else {
+      console.log("❌ Invalid type:", type);
+      return res.status(400).json({ message: "Invalid type" });
+    }
+
+    console.log("Using Model:", Model.modelName);
 
     const schedule = await Model.findById(id);
+    console.log("Found Schedule:", schedule);
+
     if (!schedule) {
+      console.log("❌ Schedule not found");
       return res.status(404).json({ message: "Schedule not found" });
     }
 
-    if (pauseDate >= schedule.endDate) {
+    console.log("Schedule End Date:", schedule.endDate);
+
+    if (pauseDate > schedule.endDate) {
       return res.status(400).json({
-        message: "Schedule already completed",
+        message: "Pause date is after schedule end date",
       });
     }
 
     const yesterday = new Date(pauseDate);
     yesterday.setDate(yesterday.getDate() - 1);
 
+    console.log("New End Date (Yesterday):", yesterday);
+
     schedule.endDate = yesterday;
     schedule.status = "paused";
 
     await schedule.save();
+
+    console.log("✅ Schedule updated successfully");
 
     res.json({
       success: true,
@@ -777,7 +797,7 @@ export const pauseSchedule = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("🔥 SERVER ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
