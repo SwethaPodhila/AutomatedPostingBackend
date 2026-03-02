@@ -27,7 +27,8 @@ export const createOrder = async (req, res) => {
         customer_phone: customerPhone,
       },
       order_note: plan,
-    };
+    }; 
+    console.log("Creating order with body:", body); // ✅ log request body
 
     const headers = {
       "Content-Type": "application/json",
