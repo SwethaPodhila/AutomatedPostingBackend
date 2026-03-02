@@ -83,6 +83,7 @@ export const paymentCallback = async (req, res) => {
   }
 }; */
 
+
 export const paymentWebhook = async (req, res) => {
   console.log("🔔 Webhook endpoint hit");
 
@@ -103,7 +104,6 @@ export const paymentWebhook = async (req, res) => {
 
     console.log("🔐 Expected Signature (Generated):", expectedSignature);
 
-    // ❌ Signature Mismatch
     if (signature !== expectedSignature) {
       console.log("❌ Signature Verification Failed");
       return res.status(400).send("Invalid Signature");
@@ -114,54 +114,56 @@ export const paymentWebhook = async (req, res) => {
     const event = JSON.parse(rawBody);
     console.log("📨 Parsed Webhook Event:", event);
 
-    // ✅ Check Event Type
     if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
       console.log("ℹ️ Ignored Event Type:", event.type);
       return res.status(200).send("Event Ignored");
     }
 
-    // ✅ Check Payment Status
     if (event.data.payment.payment_status !== "SUCCESS") {
       console.log("⚠️ Payment Not Successful:", event.data.payment.payment_status);
       return res.status(200).send("Payment Not Successful");
     }
 
-    console.log("💰 Payment Success Confirmed");
-
     const orderId = event.data.order.order_id;
     const customerId = event.data.customer_details.customer_id;
-    const plan = event.data.order.order_note;
+    const plan = event.data.order.order_note || "PRO";
 
     console.log("🧾 Order ID:", orderId);
     console.log("👤 Customer ID:", customerId);
     console.log("📦 Plan:", plan);
 
-    // 🔍 Fetch user
-    const user = await User.findOne({ where: { id: customerId } });
+    const user = await User.findOne({ _id: customerId });
 
     if (!user) {
       console.log("❌ User not found in DB");
       return res.status(404).send("User Not Found");
     }
 
-    if (user.isPaid && user.subscriptionStatus === "active") {
+    if (user.plan === plan && user.subscriptionStatus === "ACTIVE") {
       console.log("⚠️ User already upgraded. Skipping update.");
       return res.status(200).send("Already Processed");
     }
 
-    // 🧠 Update user: plan, isPaid, subscriptionStatus
-    await User.update(
-      {
-        plan: plan,
-        isPaid: true,
-        subscriptionStatus: "active", // 🔹 new field
-      },
-      { where: { id: customerId } }
-    );
+    // 🔹 Calculate expiration date
+    let planDurationDays = 30; // default 1 month
+    if (plan === "PRO") planDurationDays = 30;
+    if (plan === "ENTERPRISE") planDurationDays = 30;
 
-    console.log("🎉 User plan and subscription status updated successfully in DB");
+    const planExpires = new Date();
+    planExpires.setDate(planExpires.getDate() + planDurationDays);
+
+    // 🧠 Update user plan, subscription status, paymentId & expiration
+    user.plan = plan;
+    user.subscriptionStatus = "ACTIVE";
+    user.paymentId = event.data.payment.cf_payment_id;
+    user.planExpires = planExpires;
+
+    await user.save();
+
+    console.log(`🎉 User plan updated to ${plan}, subscription ACTIVE, expires on ${planExpires}`);
 
     return res.status(200).send("Webhook Processed Successfully");
+
   } catch (error) {
     console.error("🔥 Webhook Error:", error);
     return res.status(500).send("Server Error");
