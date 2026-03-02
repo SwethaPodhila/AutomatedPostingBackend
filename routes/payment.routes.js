@@ -7,7 +7,7 @@ const router = express.Router();
 router.post("/create-order", createOrder);
 
 // POST /api/payment/callback
-router.post("/callback", paymentCallback);
+//router.post("/callback", paymentCallback);
 router.post("/webhook", cashfreeWebhook);
 
 export default router;

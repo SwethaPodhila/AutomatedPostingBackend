@@ -96,6 +96,12 @@ app.use(cors({
   credentials: true
 }));
 
+// ONLY webhook route uses raw body
+app.use(
+  "/payment/webhook",
+  bodyParser.raw({ type: "application/json" })
+);
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -108,12 +114,6 @@ app.use("/telegram", TelegramRoutes)
 app.use("/bluesky", BlueskyRoutes);
 app.use("/analytics", AnalyticsRoutes);
 
-// ONLY webhook route uses raw body
-app.use(
-  "/payment/webhook",
-  bodyParser.raw({ type: "application/json" })
-);
-
 app.use("/payment", paymentRoutes);
 
 // =========================
@@ -125,7 +125,6 @@ const __dirname = path.dirname(__filename);
 // =========================
 // MIDDLEWARE
 // =========================
-app.use(express.json()); // For parsing application/json
 app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
 
 

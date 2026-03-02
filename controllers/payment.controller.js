@@ -56,6 +56,7 @@ export const createOrder = async (req, res) => {
   }
 };
 
+/*
 export const paymentCallback = async (req, res) => {
   try {
     const { orderId } = req.body;
@@ -81,48 +82,86 @@ export const paymentCallback = async (req, res) => {
     return res.status(500).json({ error: "Verification failed" });
   }
 };
+  */
 
-export const cashfreeWebhook = async (req, res) => {
+export const paymentWebhook = async (req, res) => {
+  console.log("🔔 Webhook endpoint hit");
+
   try {
-    const event = req.body;
-    console.log("📩 Cashfree webhook received:", event.type);
+    const signature = req.headers["x-webhook-signature"];
+    const timestamp = req.headers["x-webhook-timestamp"];
+    const rawBody = req.body.toString();
 
-    const orderId = event?.data?.order?.order_id;
-    if (!orderId) return res.sendStatus(200);
+    console.log("📦 Raw Body Received:", rawBody);
+    console.log("🕒 Timestamp:", timestamp);
+    console.log("✍️ Signature from Header:", signature);
 
-    // 🔐 Verify payment from Cashfree API
-    const response = await axios.get(
-      `${BASE_URL}/${orderId}`,
-      {
-        headers: {
-          "x-client-id": process.env.CF_APP_ID,
-          "x-client-secret": process.env.CF_SECRET_KEY,
-          "x-api-version": "2023-08-01",
-        },
-      }
-    );
+    // 🔐 Generate Expected Signature
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.CF_WEBHOOK_SECRET)
+      .update(timestamp + rawBody)
+      .digest("base64");
 
-    if (response.data.order_status === "PAID") {
-      const order = response.data;
-      const plan = order.order_note;
-      const userId = order.customer_details.customer_id;
+    console.log("🔐 Expected Signature (Generated):", expectedSignature);
 
-      const planExpires = new Date();
-      planExpires.setMonth(planExpires.getMonth() + 1);
-
-      await User.findByIdAndUpdate(userId, {
-        plan,
-        subscriptionStatus: "ACTIVE",
-        paymentId: order.cf_order_id,
-        planExpires,
-      });
-
-      console.log("✅ Payment verified & DB updated:", userId);
+    // ❌ Signature Mismatch
+    if (signature !== expectedSignature) {
+      console.log("❌ Signature Verification Failed");
+      return res.status(400).send("Invalid Signature");
     }
 
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("Webhook error:", err.message);
-    res.sendStatus(200); // NEVER fail webhook
+    console.log("✅ Signature Verified Successfully");
+
+    const event = JSON.parse(rawBody);
+    console.log("📨 Parsed Webhook Event:", event);
+
+    // ✅ Check Event Type
+    if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
+      console.log("ℹ️ Ignored Event Type:", event.type);
+      return res.status(200).send("Event Ignored");
+    }
+
+    // ✅ Check Payment Status
+    if (event.data.payment.payment_status !== "SUCCESS") {
+      console.log("⚠️ Payment Not Successful:", event.data.payment.payment_status);
+      return res.status(200).send("Payment Not Successful");
+    }
+
+    console.log("💰 Payment Success Confirmed");
+
+    const orderId = event.data.order.order_id;
+    const customerId = event.data.customer_details.customer_id;
+    const plan = event.data.order.order_note;
+
+    console.log("🧾 Order ID:", orderId);
+    console.log("👤 Customer ID:", customerId);
+    console.log("📦 Plan:", plan);
+
+    // 🔍 Check if user already upgraded (Idempotency)
+    const user = await User.findOne({ where: { id: customerId } });
+
+    if (!user) {
+      console.log("❌ User not found in DB");
+      return res.status(404).send("User Not Found");
+    }
+
+    if (user.isPaid) {
+      console.log("⚠️ User already upgraded. Skipping update.");
+      return res.status(200).send("Already Processed");
+    }
+
+    // 🧠 Update User Plan
+    await User.update(
+      { plan: plan, isPaid: true },
+      { where: { id: customerId } }
+    );
+
+    console.log("🎉 User upgraded successfully in DB");
+
+    return res.status(200).send("Webhook Processed Successfully");
+
+  } catch (error) {
+    console.error("🔥 Webhook Error:", error);
+    return res.status(500).send("Server Error");
   }
 };
