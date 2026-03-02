@@ -99,7 +99,7 @@ export const paymentWebhook = async (req, res) => {
 
     // 🔐 Generate Expected Signature
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.CF_WEBHOOK_SECRET)
+      .createHmac("sha256", process.env.CF_SECRET_KEY)
       .update(timestamp + rawBody)
       .digest("base64");
 
