@@ -81,9 +81,7 @@ export const paymentCallback = async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: "Verification failed" });
   }
-};
-  */
-
+}; */
 
 export const paymentWebhook = async (req, res) => {
   console.log("🔔 Webhook endpoint hit");
@@ -138,7 +136,7 @@ export const paymentWebhook = async (req, res) => {
     console.log("👤 Customer ID:", customerId);
     console.log("📦 Plan:", plan);
 
-    // 🔍 Check if user already upgraded (Idempotency)
+    // 🔍 Fetch user
     const user = await User.findOne({ where: { id: customerId } });
 
     if (!user) {
@@ -146,21 +144,24 @@ export const paymentWebhook = async (req, res) => {
       return res.status(404).send("User Not Found");
     }
 
-    if (user.isPaid) {
+    if (user.isPaid && user.subscriptionStatus === "active") {
       console.log("⚠️ User already upgraded. Skipping update.");
       return res.status(200).send("Already Processed");
     }
 
-    // 🧠 Update User Plan
+    // 🧠 Update user: plan, isPaid, subscriptionStatus
     await User.update(
-      { plan: plan, isPaid: true },
+      {
+        plan: plan,
+        isPaid: true,
+        subscriptionStatus: "active", // 🔹 new field
+      },
       { where: { id: customerId } }
     );
 
-    console.log("🎉 User upgraded successfully in DB");
+    console.log("🎉 User plan and subscription status updated successfully in DB");
 
     return res.status(200).send("Webhook Processed Successfully");
-
   } catch (error) {
     console.error("🔥 Webhook Error:", error);
     return res.status(500).send("Server Error");
