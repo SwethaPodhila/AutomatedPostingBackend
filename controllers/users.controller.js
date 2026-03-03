@@ -91,11 +91,12 @@ export const verifyOtp = async (req, res) => {
         user.plan = "FREE";
         user.subscriptionStatus = "ACTIVE";
 
-        // 🔥 Trial start time = NOW (use createdAt)
-        user.createdAt = new Date();
+        // 🔥 7 days free trial
+        user.planExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
         user.otp = null;
         user.otpExpires = null;
+
         await user.save();
 
         console.log("✅ OTP verified & free trial started for:", user.email);
