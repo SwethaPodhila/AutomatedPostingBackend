@@ -106,8 +106,6 @@ export const verifyOtp = async (req, res) => {
                 id: user._id.toString(),
                 name: user.name,
                 email: user.email,
-                plan: user.plan,
-                subscriptionStatus: user.subscriptionStatus,
                 createdAt: user.createdAt
             },
             process.env.JWT_SECRET,
@@ -123,8 +121,7 @@ export const verifyOtp = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                plan: user.plan,
-                subscriptionStatus: user.subscriptionStatus,
+                phone: user.phone,
                 createdAt: user.createdAt
             }
         });
@@ -154,15 +151,13 @@ export const login = async (req, res) => {
         if (!isMatch)
             return res.json({ msg: "Invalid password", success: false });
 
-       
+
         // 🔑 JWT token with plan info
         const token = jwt.sign(
             {
                 id: user._id.toString(),
                 name: user.name,
                 email: user.email,
-                plan: user.plan,
-                subscriptionStatus: user.subscriptionStatus,
                 createdAt: user.createdAt
             },
             process.env.JWT_SECRET,
@@ -178,9 +173,7 @@ export const login = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                plan: user.plan,
                 phone: user.phone,
-                subscriptionStatus: user.subscriptionStatus,
                 createdAt: user.createdAt
             }
         });
@@ -411,6 +404,39 @@ export const createSupport = async (req, res) => {
         res.status(500).json({
             success: false,
             msg: "Server error"
+        });
+    }
+};
+
+export const getUserSubscription = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        const user = await User.findById(userId).select(
+            "plan subscriptionStatus subscriptionStartDate subscriptionEndDate"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                plan: user.plan,
+                subscriptionStatus: user.subscriptionStatus,
+                subscriptionStartDate: user.subscriptionStartDate,
+                subscriptionEndDate: user.subscriptionEndDate,
+            },
+        });
+    } catch (error) {
+        console.error("Subscription fetch error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Server error",
         });
     }
 };
