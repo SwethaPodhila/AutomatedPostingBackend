@@ -92,17 +92,11 @@ export const paymentWebhook = async (req, res) => {
     const timestamp = req.headers["x-webhook-timestamp"];
     const rawBody = req.body.toString();
 
-    console.log("📦 Raw Body Received:", rawBody);
-    console.log("🕒 Timestamp:", timestamp);
-    console.log("✍️ Signature from Header:", signature);
-
-    // 🔐 Generate Expected Signature
+    // 🔐 Verify Signature
     const expectedSignature = crypto
       .createHmac("sha256", process.env.CF_SECRET_KEY)
       .update(timestamp + rawBody)
       .digest("base64");
-
-    console.log("🔐 Expected Signature (Generated):", expectedSignature);
 
     if (signature !== expectedSignature) {
       console.log("❌ Signature Verification Failed");
@@ -112,52 +106,61 @@ export const paymentWebhook = async (req, res) => {
     console.log("✅ Signature Verified Successfully");
 
     const event = JSON.parse(rawBody);
-    console.log("📨 Parsed Webhook Event:", event);
 
-    /*if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
-     console.log("ℹ️ Ignored Event Type:", event.type);
-     return res.status(200).send("Event Ignored");
-    }*/
-
-    if (event.type !== "PAYMENT_SUCCESS") {
+    // ✅ Correct Event Type Check
+    if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
       console.log("ℹ️ Ignored Event Type:", event.type);
       return res.status(200).send("Event Ignored");
     }
 
     if (event.data.payment.payment_status !== "SUCCESS") {
-      console.log("⚠️ Payment Not Successful:", event.data.payment.payment_status);
+      console.log("⚠️ Payment Not Successful");
       return res.status(200).send("Payment Not Successful");
     }
 
     const orderId = event.data.order.order_id;
     const customerId = event.data.customer_details.customer_id;
-    const plan = event.data.order.order_note || "PRO";
 
     console.log("🧾 Order ID:", orderId);
     console.log("👤 Customer ID:", customerId);
-    console.log("📦 Plan:", plan);
 
-    const user = await User.findOne({ _id: customerId });
+    // 🔥 IMPORTANT: Fetch order details to get order_note (plan)
+    const orderResponse = await axios.get(
+      `${BASE_URL}/${orderId}`,
+      {
+        headers: {
+          "x-client-id": process.env.CF_APP_ID,
+          "x-client-secret": process.env.CF_SECRET_KEY,
+          "x-api-version": "2022-09-01",
+        },
+      }
+    );
+
+    const plan = orderResponse.data.order_note;
+
+    if (!plan) {
+      console.log("❌ Plan missing in order response");
+      return res.status(400).send("Plan Missing");
+    }
+
+    console.log("📦 Plan from API:", plan);
+
+    const user = await User.findById(customerId);
 
     if (!user) {
-      console.log("❌ User not found in DB");
+      console.log("❌ User not found");
       return res.status(404).send("User Not Found");
     }
 
     if (user.plan === plan && user.subscriptionStatus === "ACTIVE") {
-      console.log("⚠️ User already upgraded. Skipping update.");
+      console.log("⚠️ Already processed");
       return res.status(200).send("Already Processed");
     }
 
-    // 🔹 Calculate expiration date
-    let planDurationDays = 30; // default 1 month
-    if (plan === "PRO") planDurationDays = 30;
-    if (plan === "ENTERPRISE") planDurationDays = 30;
-
+    // Expiry calculation
     const planExpires = new Date();
-    planExpires.setDate(planExpires.getDate() + planDurationDays);
+    planExpires.setDate(planExpires.getDate() + 30);
 
-    // 🧠 Update user plan, subscription status, paymentId & expiration
     user.plan = plan;
     user.subscriptionStatus = "ACTIVE";
     user.paymentId = event.data.payment.cf_payment_id;
@@ -165,7 +168,7 @@ export const paymentWebhook = async (req, res) => {
 
     await user.save();
 
-    console.log(`🎉 User plan updated to ${plan}, subscription ACTIVE, expires on ${planExpires}`);
+    console.log(`🎉 User upgraded to ${plan}`);
 
     return res.status(200).send("Webhook Processed Successfully");
 
