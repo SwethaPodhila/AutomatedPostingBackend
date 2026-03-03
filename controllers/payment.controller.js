@@ -27,7 +27,7 @@ export const createOrder = async (req, res) => {
         customer_phone: customerPhone,
       },
       order_note: plan,
-    }; 
+    };
     console.log("Creating order with body:", body); // ✅ log request body
 
     const headers = {
@@ -84,7 +84,6 @@ export const paymentCallback = async (req, res) => {
   }
 }; */
 
-
 export const paymentWebhook = async (req, res) => {
   console.log("🔔 Webhook endpoint hit");
 
@@ -115,7 +114,12 @@ export const paymentWebhook = async (req, res) => {
     const event = JSON.parse(rawBody);
     console.log("📨 Parsed Webhook Event:", event);
 
-    if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
+    /*if (event.type !== "PAYMENT_SUCCESS_WEBHOOK") {
+     console.log("ℹ️ Ignored Event Type:", event.type);
+     return res.status(200).send("Event Ignored");
+    }*/
+
+    if (event.type !== "PAYMENT_SUCCESS") {
       console.log("ℹ️ Ignored Event Type:", event.type);
       return res.status(200).send("Event Ignored");
     }
