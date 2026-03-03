@@ -1,4 +1,4 @@
-import User from "../models/userId.js";
+import User from "../models/users.js";
 
 export const subscriptionMiddleware = async (req, res, next) => {
   try {
