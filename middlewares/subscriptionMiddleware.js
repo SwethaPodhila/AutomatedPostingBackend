@@ -1,6 +1,6 @@
 // middlewares/subscriptionMiddleware.js
 
-import User from "../models/User.js";
+import User from "../models/users.js";
 
 export const subscriptionMiddleware = async (req, res, next) => {
   try {
@@ -25,6 +25,6 @@ export const subscriptionMiddleware = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("Subscription middleware error:", err);
-    res.status(500).json({ success: false, msg: "Internal server error" });
+    res.status(500).json({ success: false, msg: "Server error in subscription middleware" });
   }
 };
