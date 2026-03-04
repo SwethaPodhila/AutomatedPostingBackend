@@ -1,6 +1,7 @@
 import User from "../models/users.js";
 
 export const subscriptionMiddleware = async (req, res, next) => {
+  console.log("Subscription middleware triggered for userId:", req.params.userId);
   try {
     const user = await User.findById(req.params.userId);
 

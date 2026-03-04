@@ -410,11 +410,12 @@ export const createSupport = async (req, res) => {
 };
 
 export const getUserSubscription = async (req, res) => {
+    console.log("Fetching subscription for userId:", req.params.userId);
     try {
         const { userId } = req.params;
 
         const user = await User.findById(userId).select(
-            "plan subscriptionStatus subscriptionStartDate subscriptionEndDate"
+            "plan subscriptionStatus planExpires subscriptionStartDate"
         );
 
         if (!user) {
@@ -430,7 +431,7 @@ export const getUserSubscription = async (req, res) => {
                 plan: user.plan,
                 subscriptionStatus: user.subscriptionStatus,
                 subscriptionStartDate: user.subscriptionStartDate,
-                subscriptionEndDate: user.subscriptionEndDate,
+                planExpires: user.planExpires,   // ✅ correct field
             },
         });
     } catch (error) {
