@@ -12,15 +12,22 @@ cloudinary.v2.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-/**
- * mode:
- * "caption" → only caption
- * "image"   → caption + image
- */
-export const generateAICaptionAndImage = async ({ prompt, mode = "caption" }) => {
-  console.log("🟡 generateAIContent START");
+export const generateAICaptionAndImage = async (prompt) => {
+
+  console.log("🟡 generateAICaptionAndImage START");
   console.log("📝 Prompt:", prompt);
-  console.log("📌 Mode:", mode);
+
+  // ✅ Safety check
+  if (!prompt || typeof prompt !== "string") {
+    throw new Error("❌ Prompt is required");
+  }
+
+  // ✅ Detect caption-only mode
+  const lowerPrompt = prompt.toLowerCase();
+  const captionOnly =
+    lowerPrompt.includes("only caption") ||
+    lowerPrompt.includes("caption only") ||
+    lowerPrompt.includes("no image");
 
   let caption = "";
   let mediaUrl = null;
@@ -34,8 +41,7 @@ export const generateAICaptionAndImage = async ({ prompt, mode = "caption" }) =>
       messages: [
         {
           role: "system",
-          content:
-            "You are a professional content writer. Generate only caption text based on the given prompt.",
+          content: "You are a professional content writer. Generate caption based on user requirement.",
         },
         {
           role: "user",
@@ -52,29 +58,26 @@ export const generateAICaptionAndImage = async ({ prompt, mode = "caption" }) =>
     caption = prompt;
   }
 
-  // ================== IMAGE (ONLY IF mode === "image") ==================
-  if (mode === "image") {
+  // ================== IMAGE (DEFAULT: YES) ==================
+  if (!captionOnly) {
     try {
-      console.log("🎨 Generating realistic image...");
+      console.log("🎨 Generating image...");
 
       const imageRes = await openai.images.generate({
         model: "dall-e-3",
         prompt: `
-Realistic photo related to: ${prompt}.
-Use Indian context if applicable.
-Show real people (workers, professionals, business environment).
-Natural lighting, real environment, candid moment.
-No cartoon, no illustration, no CGI, no artificial style.
-ultra realistic, DSLR, 50mm lens, natural skin tones
+Realistic photo based on: ${prompt}.
+Use real people and natural environment.
+Indian context if possible.
+No cartoon, no illustration, no CGI.
+ultra realistic, DSLR, 50mm lens, natural lighting
         `,
         size: "1024x1024",
         response_format: "b64_json",
       });
 
-      console.log("✅ Image generated from OpenAI");
-
       const base64 = imageRes?.data?.[0]?.b64_json;
-      if (!base64) throw new Error("No base64 image received");
+      if (!base64) throw new Error("No image received");
 
       const buffer = Buffer.from(base64, "base64");
 
@@ -87,29 +90,27 @@ ultra realistic, DSLR, 50mm lens, natural skin tones
             public_id: uuidv4(),
           },
           (error, result) => {
-            if (error) {
-              console.error("❌ Cloudinary upload error:", error);
-              reject(error);
-            } else {
-              console.log("✅ Cloudinary upload success");
-              resolve(result.secure_url);
-            }
+            if (error) reject(error);
+            else resolve(result.secure_url);
           }
         );
 
         streamifier.createReadStream(buffer).pipe(uploadStream);
       });
 
+      console.log("✅ Image uploaded:", mediaUrl);
+
     } catch (err) {
       console.error("❌ IMAGE FLOW FAILED:", err?.message || err);
     }
+  } else {
+    console.log("🚫 Caption only requested → Skipping image");
   }
 
-  console.log("📤 Returning response");
+  console.log("📤 Done");
 
   return {
     caption,
     mediaUrl, // null if caption only
   };
 };
-
