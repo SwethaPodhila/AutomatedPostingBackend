@@ -17,7 +17,7 @@ cloudinary.v2.config({
  * "caption" → only caption
  * "image"   → caption + image
  */
-export const generateAIContent = async ({ prompt, mode = "caption" }) => {
+export const generateAICaptionAndImage = async ({ prompt, mode = "caption" }) => {
   console.log("🟡 generateAIContent START");
   console.log("📝 Prompt:", prompt);
   console.log("📌 Mode:", mode);
