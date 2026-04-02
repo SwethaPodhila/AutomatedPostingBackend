@@ -11,7 +11,7 @@ export const createOrder = async (req, res) => {
   try {
     const { plan, userId, customerName, customerEmail, customerPhone } = req.body;
 
-    const amount = plan === "PRO" ? 1 : plan === "ENTERPRISE" ? 2 : 0;
+    const amount = plan === "PRO" ? 999 : plan === "ENTERPRISE" ? 1999 : 0;
     if (!amount) return res.status(400).json({ error: "Invalid plan" });
 
     const orderId = `ORDER_${Date.now()}`;
